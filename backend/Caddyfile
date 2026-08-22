@@ -1,0 +1,51 @@
+{
+	# 必须显式关闭自动 HTTPS。
+	#
+	# caddy 默认会为站点地址自动申请证书（ACME / Let's Encrypt）。本服务的站点地址是
+	# 局域网 IP 或内网域名，ACME 校验必然失败，caddy 会反复重试并让站点长时间不可用。
+	# 这里改用自签证书手动指定（见下方 tls 指令）。
+	auto_https off
+
+	# 只做反代，不需要 admin API
+	admin off
+}
+
+# 站点地址【只写端口，不写主机名】。
+#
+# 例如写成 `https://192.0.2.10:8443` 时 caddy 会把该 IP 当作
+# SNI 匹配条件，而 RFC 6066 禁止把 IP 地址用作 SNI —— 客户端（curl / 固件 mbedtls）
+# 通过 IP 访问时根本不发 SNI，caddy 于是匹配不到任何站点、选不出证书，
+# 握手直接回 "tlsv1 alert internal error"，看起来像证书本身有问题，极难定位。
+#
+# 用 `:8443` 就是默认站点：无论有无 SNI、Host 是什么都会命中，证书由下面的 tls 指定。
+# 内网单站点部署不需要按 Host 分流，因此没有任何损失。
+#
+# 端口用 8443 而非 443：镜像已改为非 root 运行，非特权进程绑不了 1024 以下端口。
+# manifest_url 带端口没有问题 —— 固件的 SFM_MANIFEST_URL_MAX 是 128 字节，实际约 60 字符。
+:{$SFM_TLS_PORT:8443} {
+	# 自签证书。必须与固件 certs/sfm_ca.pem 里的 CA 是同一条链，
+	# 且证书的 SAN 必须包含这里用到的 IP 或域名 —— mbedtls 4.1 会校验 iPAddress SAN
+	# （x509_crt_check_san_ip），SAN 里没有对应条目时握手会直接失败。
+	tls /certs/sfm_server.pem /certs/sfm_server.key
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Strict-Transport-Security "max-age=31536000"
+	}
+
+	# 设备下载 .film 是 209120 字节的单次 GET，反代默认配置足够；
+	# 这里显式放宽超时，避免设备侧慢速链路被中途掐断。
+	reverse_proxy backend:5000 {
+		transport http {
+			response_header_timeout 120s
+			read_timeout 120s
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

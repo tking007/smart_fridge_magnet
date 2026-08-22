@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  XML 侧配色。**Compose 不读这里** —— 界面配色的权威来源是 ui/theme/Color.kt。
+  这里只服务于 Compose 之前就已生效的东西：启动窗口背景与应用图标。
+  两处必须与 theme 一致，否则冷启动时会先闪一下旧底色。
+-->
+<resources>
+    <!-- 启动窗口背景，对应 theme 的 Neutral50 -->
+    <color name="background">#F6F6F6</color>
+
+    <!-- 平台主题用（Compose 之前生效的那一层）。对应 theme 的 Charcoal / Leaf。 -->
+    <color name="primary">#3B3C39</color>
+    <color name="accent">#8DBE49</color>
+
+    <!-- 应用图标：炭黑底上的六色电子纸设备。 -->
+    <color name="icon_background">#3B3C39</color>
+    <color name="icon_device">#F6F6F6</color>
+    <color name="icon_paper">#FFFFFF</color>
+    <color name="icon_ink">#292A27</color>
+    <color name="icon_green">#8DBE49</color>
+    <color name="icon_yellow">#F0C94B</color>
+    <color name="icon_red">#D85C52</color>
+    <color name="icon_blue">#4C7EB7</color>
+</resources>

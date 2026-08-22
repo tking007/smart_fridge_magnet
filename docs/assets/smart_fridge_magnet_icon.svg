@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img"
+     aria-labelledby="title description">
+  <title id="title">Smart Fridge Magnet</title>
+  <desc id="description">Six-color e-paper fridge magnet with three side buttons</desc>
+  <rect x="2" y="2" width="104" height="104" rx="23" fill="#3B3C39"/>
+    <path fill="#F6F6F6"
+          d="M39,27 H67 C70.9,27 74,30.1 74,34 V74 C74,77.9 70.9,81 67,81 H39 C35.1,81 32,77.9 32,74 V34 C32,30.1 35.1,27 39,27 Z M74,40 H78 C79.66,40 81,41.34 81,43 V44 C81,45.66 79.66,47 78,47 H74 Z M74,50.5 H78 C79.66,50.5 81,51.84 81,53.5 V54.5 C81,56.16 79.66,57.5 78,57.5 H74 Z M74,61 H78 C79.66,61 81,62.34 81,64 V65 C81,66.66 79.66,68 78,68 H74 Z"/>
+    <path fill="#292A27"
+          d="M40,31 H66 C68.21,31 70,32.79 70,35 V73 C70,75.21 68.21,77 66,77 H40 C37.79,77 36,75.21 36,73 V35 C36,32.79 37.79,31 40,31 Z"/>
+    <path fill="#FFFFFF"
+          d="M40,34 H66 C66.55,34 67,34.45 67,35 V73 C67,73.55 66.55,74 66,74 H40 C39.45,74 39,73.55 39,73 V35 C39,34.45 39.45,34 40,34 Z"/>
+    <path fill="#8DBE49" d="M41,37 H65 V42 H41 Z"/>
+    <path fill="#F0C94B"
+          d="M46.8,48.5 A2.8,2.8 0,1 1,41.2 48.5 A2.8,2.8 0,1 1,46.8 48.5 Z"/>
+    <path fill="#D85C52"
+          d="M46.8,57 A2.8,2.8 0,1 1,41.2 57 A2.8,2.8 0,1 1,46.8 57 Z"/>
+    <path fill="#4C7EB7"
+          d="M46.8,65.5 A2.8,2.8 0,1 1,41.2 65.5 A2.8,2.8 0,1 1,46.8 65.5 Z"/>
+    <path fill="#292A27"
+          d="M49,47 H64 V50 H49 Z M49,55.5 H61 V58.5 H49 Z M49,64 H64 V67 H49 Z"/>
+  <path fill="#8DBE49"
+        d="M54.5,79 A1.5,1.5 0,1 1,51.5 79 A1.5,1.5 0,1 1,54.5 79 Z"/>
+</svg>

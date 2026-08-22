@@ -1,0 +1,78 @@
+# 智能冰箱贴后端 — 本地/演示部署
+#
+# 用法：
+#   1. cp .env.example .env  并填入 SFM_API_TOKEN、AI_API_KEY
+#   2. 生成自签 CA 与服务器证书（固件信任该 CA，见 embedded/.../certs/gen-ca.sh）：
+#        bash ../embedded/smart_fridge_magnet/certs/gen-ca.sh 192.0.2.10
+#      脚本会把 sfm_server.pem / sfm_server.key 输出到 backend/certs/
+#   3. 按 certs/README.md 在本地固件构建中显式追加生成的 sfm_ca.pem
+#   4. 在 .env 里设置 SFM_BASE_URL（必须是 https，且主机部分要在证书 SAN 里）
+#   5. docker compose up -d --build
+#   6. 健康检查（用 CA 校验，不加 -k）：
+#        curl --cacert ../embedded/smart_fridge_magnet/certs/sfm_ca.pem \
+#          -H "Authorization: Bearer $SFM_API_TOKEN" \
+#          https://192.0.2.10:8443/api/health
+#
+# 拓扑：caddy 在前面终结 TLS，backend 只在内部网络监听明文 5000，不再映射到宿主。
+# 固件强制要求 manifest 的 film_url 为 HTTPS，因此 TLS 不是可选项。
+services:
+  backend:
+    build: .
+    image: sfm-backend:latest
+    container_name: sfm-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # film_url 的基址。**多数部署留空即可** —— 留空时后端用「设备本次请求所用的地址」
+      # 来拼 film_url，这对容器 IP 随机分配、云平台入口地址可能变动的环境更稳妥：
+      # 设备既然拉到了 manifest，它用的那个地址就一定是通的。
+      #
+      # 只在「下载域名与访问域名不同」（CDN、专用下载域名）时才需要显式设置；
+      # 一旦设置，它必须是 https（固件强制），且主机部分要在服务器证书的 SAN 里。
+      SFM_BASE_URL: ${SFM_BASE_URL-}
+      # 时区。镜像已内置 Asia/Shanghai，这里允许按部署地覆盖。
+      # 「几点做什么」的判断按本地钟点写的，配错会让「设置的时间不生效」。
+      TZ: ${TZ:-Asia/Shanghai}
+    # 不再映射到宿主：明文端口只在 compose 内部网络可达，对外统一走 caddy 的 TLS。
+    expose:
+      - "5000"
+    volumes:
+      # SQLite 与 .film 都在这个卷里（SFM_FILM_DIR=/data/devices）。
+      # 二者必须同卷，否则容器重建后版本记录与文件会不一致。
+      - sfm-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:5000/healthz').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sfm-caddy
+    restart: unless-stopped
+    environment:
+      # caddy 只需要知道监听端口。刻意不传主机名/IP：
+      # 站点地址一旦带上 IP，caddy 会把它当 SNI 匹配条件，而 IP 不能作 SNI，
+      # 通过 IP 访问时会握手失败（详见 Caddyfile 内注释）。
+      # 「用哪个地址访问」这件事只由服务器证书的 SAN 与 SFM_BASE_URL 决定。
+      SFM_TLS_PORT: ${SFM_TLS_PORT:-8443}
+    ports:
+      - "${SFM_TLS_PORT:-8443}:${SFM_TLS_PORT:-8443}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 证书放在项目内 certs/ 而不是 ~/ ：compose 对 "~" 的展开行为不可靠，
+      # 且相对路径能保证团队成员的配置一致。整个 certs/ 已由 .gitignore 排除。
+      - ./certs/sfm_server.pem:/certs/sfm_server.pem:ro
+      - ./certs/sfm_server.key:/certs/sfm_server.key:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+
+volumes:
+  sfm-data:
+  caddy-data:
+  caddy-config:

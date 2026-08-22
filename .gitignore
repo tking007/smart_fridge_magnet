@@ -1,0 +1,63 @@
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+keystore.properties
+
+# TLS 私钥绝不入库。
+*.key
+*.srl
+embedded/**/certs/*.pem
+
+# 后端的服务器证书是【本机部署产物】，不入库：
+backend/certs/
+
+# Python / backend
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+backend/logs/
+logs/
+backend/data/*.db
+backend/uploads/
+backend/temp/
+
+# Android / Gradle
+.gradle/
+**/build/
+captures/
+*.apk
+*.aab
+
+# ESP-IDF (legacy firmware/** layout)
+firmware/**/build/
+firmware/**/managed_components/
+firmware/**/sdkconfig.old
+
+# ESP-IDF (current embedded/** layout, e.g. embedded/smart_fridge_magnet)
+embedded/**/build/
+embedded/**/managed_components/
+embedded/**/sdkconfig.old
+
+# Native tooling
+compile_commands.json
+
+# Generated and temporary artifacts
+node_modules/
+workspace_thumbs/

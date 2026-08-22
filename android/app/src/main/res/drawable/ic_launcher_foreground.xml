@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  竖向电子纸设备、三餐菜单和三颗实体键。
+
+  几何全部收在自适应图标安全区内（以 54,54 为心、半径 33 的圆）：最外的机身圆角与
+  按键右端到中心均不超过 32。
+  机身与三颗按键放在同一个 path：拆成两个 path 会在接缝处留一条抗锯齿细线，而按键
+  与机身同色。ic_launcher_monochrome.xml 必须复用这里的每一处坐标。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/icon_device"
+        android:pathData="M39,27 H67 C70.9,27 74,30.1 74,34 V74 C74,77.9 70.9,81 67,81 H39 C35.1,81 32,77.9 32,74 V34 C32,30.1 35.1,27 39,27 Z M74,40 H78 C79.66,40 81,41.34 81,43 V44 C81,45.66 79.66,47 78,47 H74 Z M74,50.5 H78 C79.66,50.5 81,51.84 81,53.5 V54.5 C81,56.16 79.66,57.5 78,57.5 H74 Z M74,61 H78 C79.66,61 81,62.34 81,64 V65 C81,66.66 79.66,68 78,68 H74 Z" />
+    <path
+        android:fillColor="@color/icon_ink"
+        android:pathData="M40,31 H66 C68.21,31 70,32.79 70,35 V73 C70,75.21 68.21,77 66,77 H40 C37.79,77 36,75.21 36,73 V35 C36,32.79 37.79,31 40,31 Z" />
+    <path
+        android:fillColor="@color/icon_paper"
+        android:pathData="M40,34 H66 C66.55,34 67,34.45 67,35 V73 C67,73.55 66.55,74 66,74 H40 C39.45,74 39,73.55 39,73 V35 C39,34.45 39.45,34 40,34 Z" />
+    <path
+        android:fillColor="@color/icon_green"
+        android:pathData="M41,37 H65 V42 H41 Z" />
+    <path
+        android:fillColor="@color/icon_yellow"
+        android:pathData="M46.8,48.5 A2.8,2.8 0,1 1,41.2 48.5 A2.8,2.8 0,1 1,46.8 48.5 Z" />
+    <path
+        android:fillColor="@color/icon_red"
+        android:pathData="M46.8,57 A2.8,2.8 0,1 1,41.2 57 A2.8,2.8 0,1 1,46.8 57 Z" />
+    <path
+        android:fillColor="@color/icon_blue"
+        android:pathData="M46.8,65.5 A2.8,2.8 0,1 1,41.2 65.5 A2.8,2.8 0,1 1,46.8 65.5 Z" />
+    <path
+        android:fillColor="@color/icon_ink"
+        android:pathData="M49,47 H64 V50 H49 Z M49,55.5 H61 V58.5 H49 Z M49,64 H64 V67 H49 Z" />
+    <path
+        android:fillColor="@color/icon_green"
+        android:pathData="M54.5,79 A1.5,1.5 0,1 1,51.5 79 A1.5,1.5 0,1 1,54.5 79 Z" />
+</vector>

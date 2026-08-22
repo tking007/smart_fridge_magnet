@@ -1,0 +1,19 @@
+## IDF Component Manager Manifest File
+dependencies:
+  ## Required IDF version
+  idf:
+    version: '==6.0.2'
+  # # Put list of dependencies here
+  # # For components maintained by Espressif:
+  # component: "~1.0.0"
+  # # For 3rd party components:
+  # username/component: ">=1.0.0,<2.0.0"
+  # username2/component2:
+  #   version: "~1.0.0"
+  #   # For transient dependencies `public` flag can be set.
+  #   # `public` flag doesn't have an effect dependencies of the `main` component.
+  #   # All dependencies of `main` are public by default.
+  #   public: true
+  espressif/led_strip: ^3.0.3   # 3.0.3 起显式 #include esp_heap_caps.h，兼容 ESP-IDF 6.0
+  # 已移除 esp-idf-lib/encoder：硬件是三个独立按键，不是旋转编码器，
+  # 改用自带的 hal_key 驱动（见 components/film_hal/src/hal_key.c）。

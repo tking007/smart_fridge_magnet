@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  平台主题。只在 Compose 接手之前生效：启动窗口那一帧、以及系统弹窗（权限、文件选择器）
+  的强调色。界面本身的配色在 ui/theme/Theme.kt。
+-->
+<resources>
+    <style name="Theme.FridgeMagnet" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/primary</item>
+        <item name="android:colorPrimaryDark">@color/primary</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+</resources>

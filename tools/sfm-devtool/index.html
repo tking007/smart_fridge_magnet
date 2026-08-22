@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>智能冰箱贴 调试工具</title>
+<style>
+  :root {
+    --bg:#0f1216; --panel:#171b21; --panel2:#1e242c; --line:#2a323c;
+    --fg:#e6edf3; --mut:#8b98a5; --accent:#4a9eff; --ok:#3fb950; --warn:#d29922; --err:#f85149;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif; }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); background:var(--panel); }
+  header h1 { margin:0; font-size:17px; }
+  header p { margin:3px 0 0; color:var(--mut); font-size:12px; }
+  /* 全局状态栏：蓝牙连接 + 当前待传 */
+  .statusbar { position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:8px 24px;
+    align-items:center; padding:10px 24px; background:var(--panel2); border-bottom:1px solid var(--line); font-size:13px; }
+  .statusbar .item { display:flex; align-items:center; gap:8px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--mut); flex:0 0 auto; }
+  .dot.on { background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .statusbar b { color:var(--fg); font-weight:600; }
+  .wrap { max-width:1080px; margin:0 auto; padding:20px 24px 60px; }
+  .tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+  .tab { padding:8px 15px; border:1px solid var(--line); background:var(--panel); color:var(--mut);
+    border-radius:8px; cursor:pointer; user-select:none; font-size:13px; }
+  .tab.active { color:#fff; border-color:var(--accent); background:var(--accent); }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .panel h2 { margin:0 0 6px; font-size:15px; }
+  .panel .sub { color:var(--mut); font-size:12px; margin:0 0 14px; }
+  .row { display:flex; gap:20px; flex-wrap:wrap; }
+  .col { flex:1; min-width:280px; }
+  label { display:block; color:var(--mut); font-size:12px; margin:12px 0 4px; }
+  select, input[type=text], input[type=number], input[type=file], textarea {
+    width:100%; padding:8px 10px; background:var(--panel2); color:var(--fg);
+    border:1px solid var(--line); border-radius:8px; font:inherit; }
+  textarea { line-height:1.7; resize:vertical; }
+  button { padding:9px 16px; background:var(--accent); color:#fff; border:none;
+    border-radius:8px; font:inherit; cursor:pointer; font-weight:600; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--fg); font-weight:400; }
+  .btns { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; align-items:center; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:28px; text-align:center;
+    color:var(--mut); cursor:pointer; transition:.15s; }
+  .drop.over { border-color:var(--accent); color:var(--fg); background:var(--panel2); }
+  canvas { image-rendering:pixelated; max-width:100%; height:auto; background:#000;
+    border:1px solid var(--line); border-radius:8px; }
+  .preview-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .preview-grid .cap { color:var(--mut); font-size:12px; margin-bottom:6px; }
+  .info { font-family:ui-monospace,Menlo,monospace; font-size:12px; background:var(--panel2);
+    border:1px solid var(--line); border-radius:8px; padding:12px; white-space:pre-wrap; word-break:break-all; }
+  .info b { color:var(--ok); }
+  .swatches { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .sw { width:22px; height:22px; border-radius:5px; border:1px solid #0006; }
+  .log { font-family:ui-monospace,monospace; font-size:12px; background:#0b0e12;
+    border:1px solid var(--line); border-radius:8px; padding:10px; height:190px; overflow:auto; white-space:pre-wrap; }
+  .muted { color:var(--mut); font-size:12px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid var(--line); color:var(--mut); }
+  .warnbox { border-color:var(--warn); } .warnbox b { color:var(--warn); }
+  .hidden { display:none; }
+  .bar { position:relative; height:24px; background:var(--panel2); border-radius:8px; overflow:hidden; margin-top:12px; }
+  .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),#6db3ff); transition:width .12s; }
+  .bar > .pct { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font:600 13px ui-monospace,Menlo,monospace; color:var(--fg); letter-spacing:.5px; }
+  .previewbox { margin-top:14px; }
+  .previewbox .cap { color:var(--mut); font-size:12px; margin-bottom:6px; }
+  .previewbox canvas { max-width:360px; width:100%; }
+  a.dl { text-decoration:none; }
+  .steps { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; padding:0; list-style:none; }
+  .steps li { color:var(--mut); font-size:12px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:999px; padding:4px 12px; }
+  /* 日志常驻页面底部，切 tab 不丢：设备操作的反馈几乎全在这里，
+     放进某一个 tab 会让"在另一个 tab 点的按钮"结果看不见。 */
+  .logdock { border-top:1px solid var(--line); background:var(--panel); padding:12px 24px 20px; }
+  .logdock .head { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .logdock h2 { margin:0; font-size:14px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>智能冰箱贴 调试工具 <span class="pill">792×528 · 六色 · 209120 B</span></h1>
+  <p>本地生成 / 预览 .film，蓝牙直传上屏、设备参数读写、Wi-Fi 配网、固件 OTA。</p>
+</header>
+
+<!-- 全局状态：蓝牙连接 + 当前待传 .film -->
+<div class="statusbar">
+  <div class="item"><span class="dot" id="dotBle"></span><span id="bleStatus">蓝牙未连接</span></div>
+  <div class="item">当前待传：<b id="filmStatus">无</b></div>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" data-tab="convert">图片转 .film</div>
+    <div class="tab" data-tab="pattern">测试图案</div>
+    <div class="tab" data-tab="ble">蓝牙传输</div>
+    <div class="tab" data-tab="device">设备控制</div>
+    <div class="tab" data-tab="ota">固件 OTA</div>
+    <div class="tab" data-tab="about">说明</div>
+  </div>
+
+  <!-- ==================== 图片转 .film ==================== -->
+  <section id="tab-convert">
+    <div class="panel">
+      <h2>图片转 .film</h2>
+      <p class="sub">拖入任意图片，自动缩放 + 六色最近色量化为设备可显示的 .film。</p>
+      <div class="drop" id="drop">拖拽图片到此处，或点击选择<br><span class="muted">PNG / JPG / WebP</span></div>
+      <input type="file" id="file" accept="image/*" class="hidden" />
+      <div class="row" style="margin-top:12px">
+        <div class="col" style="max-width:280px">
+          <label>缩放方式</label>
+          <select id="fit">
+            <option value="cover" selected>cover（填满裁剪）</option>
+            <option value="contain">contain（完整留白）</option>
+            <option value="stretch">stretch（拉伸）</option>
+          </select>
+        </div>
+      </div>
+      <div class="swatches" id="swatches"></div>
+      <div class="muted" style="margin-top:4px">六色：黑 / 白 / 黄 / 红 / 蓝 / 绿（与固件 color_lut 对齐）</div>
+    </div>
+    <div class="panel">
+      <div class="preview-grid">
+        <div><div class="cap">原图（缩放后）</div><canvas id="cvsSrc"></canvas></div>
+        <div><div class="cap">六色量化（设备实际显示）</div><canvas id="cvsOut"></canvas></div>
+      </div>
+      <div class="info" id="info" style="margin-top:14px">尚未生成，拖入一张图片。</div>
+      <div class="btns">
+        <button id="toBle" disabled>去蓝牙页 →</button>
+        <a class="dl" id="dlLink"><button class="ghost" id="download" disabled>下载 .film</button></a>
+      </div>
+    </div>
+
+    <!-- 上传到后端：生成 curl 而不是页内 fetch。
+         页内 fetch 打不通有三道墙，且都不在这个工具能修的范围里：后端 CORS 白名单
+         （SFM_CORS_ORIGINS 为空时 flask-cors 根本不挂载）、自签 https 证书、以及
+         把 API Token 填进网页这件事本身。curl 一条命令全绕开，也不必在页面上存凭据。 -->
+    <div class="panel">
+      <h2>上传到后端</h2>
+      <p class="sub">生成一条 curl 命令，在终端执行即可发布为新版本。Token 走环境变量，不填进页面。</p>
+      <div class="row">
+        <div class="col">
+          <label>后端地址（含协议，无尾斜杠）</label>
+          <input type="text" id="curlBase" placeholder="https://host:8443" />
+        </div>
+        <div class="col" style="max-width:200px">
+          <label>device_id</label>
+          <input type="text" id="curlDevice" value="dev001" />
+        </div>
+        <div class="col" style="max-width:200px">
+          <label>本地 .film 文件名</label>
+          <input type="text" id="curlFile" value="image.film" />
+        </div>
+      </div>
+      <div class="btns">
+        <button class="ghost" id="curlGen">生成命令</button>
+        <button class="ghost" id="curlCopy" disabled>复制</button>
+        <span class="muted" id="curlMsg"></span>
+      </div>
+      <div class="info" id="curlOut" style="margin-top:12px">点「生成命令」。</div>
+    </div>
+  </section>
+
+  <!-- ==================== 测试图案 ==================== -->
+  <section id="tab-pattern" class="hidden">
+    <div class="panel">
+      <h2>测试图案</h2>
+      <p class="sub">屏幕 bring-up：验证六色是否正确、方向 / 尺寸、双次刷新是否干净。</p>
+      <label>图案类型</label>
+      <select id="patternType" style="max-width:440px">
+        <option value="bars">六色竖条（颜色与顺序）</option>
+        <option value="orient">方向标记（左上红 / 顶蓝 / 左绿 / 中心十字）</option>
+        <option value="checker">棋盘格黑白（像素对齐）</option>
+        <option value="grad">水平色阶</option>
+        <option value="solid-black">纯黑</option>
+        <option value="solid-white">纯白</option>
+        <option value="solid-red">纯红</option>
+        <option value="solid-green">纯绿</option>
+        <option value="solid-blue">纯蓝</option>
+        <option value="solid-yellow">纯黄</option>
+      </select>
+      <div class="preview-grid" style="margin-top:16px">
+        <div><div class="cap">图案预览</div><canvas id="cvsPat"></canvas></div>
+        <div><div class="info" id="patInfo">—</div></div>
+      </div>
+      <div class="btns">
+        <button id="patToBle">去蓝牙页 →</button>
+        <a class="dl" id="dlPatLink"><button class="ghost" id="downloadPat">下载 .film</button></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 蓝牙传输 ==================== -->
+  <section id="tab-ble" class="hidden">
+    <div class="panel">
+      <h2>连接</h2>
+      <ul class="steps">
+        <li>① 在「图片 / 测试图案」生成</li>
+        <li>② 连接设备</li>
+        <li>③ 直传</li>
+      </ul>
+      <div class="btns" style="margin-top:0">
+        <button id="bleConnect" title="扫描并连接「智能冰箱贴」">连接设备</button>
+        <button class="ghost" id="bleDisconnect" disabled>断开</button>
+      </div>
+      <p class="muted">仅 Chrome / Edge（桌面或 Android），需 https 或 localhost。设备平时深睡不广播，扫不到时按一下设备侧键。</p>
+    </div>
+
+    <div class="panel">
+      <h2>直传当前 .film</h2>
+      <p class="sub">发送顶部状态栏「当前待传」那一份。传完固件自动按文件名上屏。</p>
+      <div class="btns" style="margin-top:0">
+        <input type="text" id="bleFilename" value="debug.film" style="max-width:200px" />
+        <button id="bleSend" disabled>直传</button>
+      </div>
+      <div class="bar"><i id="bleBar"></i><span class="pct" id="blePct">0%</span></div>
+      <div class="previewbox" id="blePreviewBox" style="display:none">
+        <div class="cap">当前待传预览（从 .film 实际字节解码，所见即设备将显示的内容）</div>
+        <canvas id="blePreview"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>连发多张 .film</h2>
+      <p class="sub">选多个本地 .film 一次传完，用侧边上/下键翻页。传输期间开静默接收，只在最后刷一次屏。</p>
+      <label>选择 .film 文件（可多选，按文件名排序发送）</label>
+      <input type="file" id="setFiles" accept=".film" multiple />
+      <p class="muted" style="margin-top:8px">
+        <label style="color:var(--mut);display:inline">
+          <input type="checkbox" id="clearBeforeSend" checked style="width:auto" />
+          连发前先清空设备旧图（只影响这一项，不影响上面的单张直传）
+        </label>
+      </p>
+      <div class="btns">
+        <button id="bleSendSet" disabled>连发</button>
+        <span class="muted" id="setInfo">未选择文件</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>设备上的画面</h2>
+      <p class="sub">0x06 列表 / 0x07 显示 / 0x05 删除 / 0x45 清空 / 0x47 按时段显示。</p>
+      <div class="btns" style="margin-top:0">
+        <button id="bleListFiles" disabled>刷新列表</button>
+        <button class="ghost" id="bleDisplayNow" disabled title="让设备按当前钟点自己选图">按当前时段显示</button>
+        <button class="ghost" id="bleClearAll" disabled>清空设备旧图</button>
+      </div>
+      <div class="muted" id="fileListInfo" style="margin-top:10px">—</div>
+      <div id="fileListBox"></div>
+    </div>
+  </section>
+
+  <!-- ==================== 设备控制 ==================== -->
+  <section id="tab-device" class="hidden">
+    <div class="panel">
+      <h2>状态查询</h2>
+      <p class="sub">解码结果显示在下方，原始字节见页底日志。</p>
+      <div class="btns" style="margin-top:0">
+        <button class="ghost dev-btn" id="qStatusAll" disabled>合并状态 0x43</button>
+        <button class="ghost dev-btn" id="qWifi" disabled>Wi-Fi 0x3A</button>
+        <button class="ghost dev-btn" id="qSync" disabled>取图状态 0x3D</button>
+        <button class="ghost dev-btn" id="qBattery" disabled>电量 0x23</button>
+        <button class="ghost dev-btn" id="qSleep" disabled>休眠 0x26</button>
+        <button class="ghost dev-btn" id="qWake" disabled>唤醒表 0x49</button>
+        <button class="ghost dev-btn" id="qPoll" disabled>轮询 0x4B</button>
+        <button class="ghost dev-btn" id="qPin" disabled>置顶 0x4D</button>
+      </div>
+      <div class="info" id="devStatus" style="margin-top:12px">—</div>
+    </div>
+
+    <div class="panel">
+      <h2>休眠</h2>
+      <p class="sub">0x25。sleep_mode 存在 NVS，改固件默认值对已烧录的设备无效，必须显式发一次。</p>
+      <div class="btns" style="margin-top:0">
+        <button class="ghost dev-btn" id="bleSleepOn" disabled>开启省电休眠</button>
+        <button class="ghost dev-btn" id="bleSleepOff" disabled>关闭休眠（调试）</button>
+      </div>
+      <p class="muted">关闭后设备常驻不睡，实测一夜耗尽电池并反复重启，用完请重新开启。</p>
+    </div>
+
+    <div class="panel">
+      <h2>唤醒时间表 / 轮询周期</h2>
+      <p class="sub">0x48 设置唤醒表（全量替换）· 0x4A 设置轮询秒数（固件会钳制，响应是实际生效值）。</p>
+      <div class="row">
+        <div class="col">
+          <label>唤醒时刻（HH:MM，逗号分隔，最多 6 个；留空 = 清掉全部饭点唤醒点）</label>
+          <input type="text" id="wakeSlots" value="07:00,11:30,17:30" />
+        </div>
+        <div class="col" style="max-width:220px">
+          <label>兜底周期（分钟，0 = 关闭）</label>
+          <input type="number" id="wakeFallback" value="240" min="0" max="10080" />
+        </div>
+        <div class="col" style="max-width:220px">
+          <label>轮询周期（秒）</label>
+          <input type="number" id="pollSeconds" value="900" min="1" />
+        </div>
+      </div>
+      <div class="btns">
+        <button class="dev-btn" id="setWake" disabled>设置唤醒表 0x48</button>
+        <button class="ghost dev-btn" id="setPoll" disabled>设置轮询 0x4A</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>置顶画面</h2>
+      <p class="sub">0x4C。把某一张 .film 顶到菜单前面显示，四种模式共用一条记录。</p>
+      <div class="row">
+        <div class="col" style="max-width:260px">
+          <label>模式</label>
+          <select id="pinMode">
+            <option value="1">1 ALWAYS 一直显示</option>
+            <option value="2">2 WINDOW 时段内显示</option>
+            <option value="3" selected>3 OUTSIDE_MEAL 做饭时段外显示</option>
+          </select>
+        </div>
+        <div class="col" style="max-width:160px">
+          <label>窗口起（HH:MM）</label>
+          <input type="text" id="pinStart" value="22:00" />
+        </div>
+        <div class="col" style="max-width:160px">
+          <label>窗口止（HH:MM，不含）</label>
+          <input type="text" id="pinEnd" value="06:00" />
+        </div>
+        <div class="col">
+          <label>文件名（设备上已存在的 .film）</label>
+          <input type="text" id="pinName" value="draw_a1b2c3.film" />
+        </div>
+      </div>
+      <div class="btns">
+        <button class="dev-btn" id="setPin" disabled>设置置顶</button>
+        <button class="ghost dev-btn" id="clearPin" disabled>取消置顶</button>
+      </div>
+      <p class="muted">
+        窗口只在 WINDOW 模式生效；<code>起 &gt; 止</code> 表示跨午夜，<code>起 == 止</code> 是空窗口（恒不显示）。
+        文件名限 <code>[0-9A-Za-z._-]</code>、≤31 字符、须以 <code>.film</code> 结尾，且不能含
+        <code>today/breakfast/lunch/dinner</code>（会与菜单图撞名）。
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>Wi-Fi 配网 + 同步</h2>
+      <p class="sub">逐字段写入后触发连接。manifest_url 必须 https（固件拒收明文）。</p>
+      <div class="row">
+        <div class="col">
+          <label>Wi-Fi SSID</label><input type="text" id="wpSsid" placeholder="MyWiFi" />
+          <label>Wi-Fi 密码</label><input type="text" id="wpPass" placeholder="password" />
+          <label>device_id（0x40）</label><input type="text" id="wpDeviceId" placeholder="dev001" />
+        </div>
+        <div class="col">
+          <label>manifest_url（必须 https://）</label>
+          <input type="text" id="wpManifest" placeholder="https://host/api/devices/dev001/display/manifest" />
+          <label>device_token（0x42，只写不可读）</label>
+          <input type="text" id="wpToken" placeholder="debug-token" />
+        </div>
+      </div>
+      <div class="btns">
+        <button class="dev-btn" id="bleProvision" disabled>写入配网 + 连接 Wi-Fi</button>
+        <button class="ghost dev-btn" id="bleSyncNow" disabled>立即同步 0x44</button>
+      </div>
+    </div>
+
+    <!-- 通用发送框：新加一条 opcode 时不必先改这个工具。
+         调试固件时最常见的需求恰恰是"发一条页面上还没有的命令"。 -->
+    <div class="panel">
+      <h2>发送任意命令</h2>
+      <p class="sub">帧格式 <code>0x55 | opcode | len | payload | 校验和</code>，校验和自动算。</p>
+      <div class="row">
+        <div class="col" style="max-width:160px">
+          <label>opcode（hex）</label>
+          <input type="text" id="rawOp" placeholder="4D" />
+        </div>
+        <div class="col" style="max-width:200px">
+          <label>载荷类型</label>
+          <select id="rawKind">
+            <option value="hex" selected>hex 字节（如 01 0E 10）</option>
+            <option value="text">UTF-8 文本</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>载荷（留空 = 无载荷）</label>
+          <input type="text" id="rawPayload" placeholder="" />
+        </div>
+      </div>
+      <div class="btns">
+        <button class="ghost dev-btn" id="rawSend" disabled>发送</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 固件 OTA ==================== -->
+  <section id="tab-ota" class="hidden">
+    <div class="panel">
+      <h2>固件 OTA 升级（BLE）</h2>
+      <div class="info warnbox" style="margin-bottom:14px"><b>注意：</b>先在「蓝牙传输」页连接设备。把 <code>.bin</code> 写入备用 OTA 分区，完成后设备校验镜像并自动重启。请用 <code>build/&lt;app&gt;.bin</code>（应用镜像，非 merged-bin）。BLE 带宽有限，~1.6MB 需数分钟，中途勿断连。升级后配网信息会被重置，需重新配网一次。</div>
+      <label>固件镜像（.bin）</label>
+      <input type="file" id="otaFile" accept=".bin" />
+      <div class="btns">
+        <button id="otaSend" disabled>开始 OTA 升级</button>
+        <span class="muted" id="otaName"></span>
+      </div>
+      <div class="bar"><i id="otaBar"></i><span class="pct" id="otaPct">0%</span></div>
+    </div>
+  </section>
+
+  <!-- ==================== 说明 ==================== -->
+  <section id="tab-about" class="hidden">
+    <div class="panel">
+      <h2>.film 格式</h2>
+      <div class="info" style="line-height:1.8">.film = 32B 文件头 + 像素（4bit/像素，2 像素/字节，row-major）
+792×528 → 像素 <b>209088</b> B，总计 <b>209120</b> B
+头：[0..3] 像素长度 = 209088   [4..5] 宽 = 792   [6..7] 高 = 528   [8] 颜色数 = 6
+    [16..21] 调色板 = 00 FF FC E0 03 1C（真实色值字节，非索引）
+像素半字节 = 调色板索引 0..5；固件按 color_lut[colorTable[索引]] 取色，故 colorTable 必须写真实色值。</div>
+    </div>
+    <div class="panel">
+      <h2>BLE 契约</h2>
+      <div class="info" style="line-height:1.8">Service 0x2000 / Write 0x2001（带响应写）/ Notify 0x2001·0x2002·0x2003
+帧：HEAD 0x55 | opcode | len(1B) | payload | 和校验(1B)；len 单字节 ⇒ payload ≤ 255、整帧 ≤ <b>259</b> B
+一次 BLE 写入 = 一个完整命令包，固件不做跨写入重组
+
+文件传输：FILE_START 0x03 → FILE_NAME 0x00 → FILE_LEN 0x01 → FILE_DATA 0x02* → FILE_STOP 0x04
+STOP 成功后固件自动按文件名上屏；不要再发 FILE_DISPLAY(0)（会切回列表第 0 个旧图）
+
+本工具用到的 opcode：
+  0x05 删除 / 0x06 列表 / 0x07 显示指定 id / 0x45 清空全部 / 0x46 静默接收 / 0x47 按时段显示
+  0x23 电量 / 0x25·0x26 休眠 设置·查询
+  0x30 Wi-Fi 开关 / 0x32 SSID / 0x34 密码 / 0x38 连接 / 0x3A 连接状态 / 0x3D 取图状态
+  0x3E manifest_url / 0x40 device_id / 0x42 device_token（只写）/ 0x43 合并状态 / 0x44 SYNC_NOW
+  0x48·0x49 唤醒时间表 设置·查询 / 0x4A·0x4B 轮询周期 设置·查询 / 0x4C·0x4D 置顶画面 设置·查询
+  0x10 OTA_LEN / 0x11 OTA_DATA / 0x13 OTA_STOP
+完整表见 embedded/smart_fridge_magnet/docs/ble_protocol.md</div>
+    </div>
+    <div class="panel">
+      <h2>发布链路</h2>
+      <div class="info" style="line-height:1.8">本工具只做「本地生成 + 蓝牙直传 + 设备参数读写」。
+走后端发布用「图片转 .film → 上传到后端」生成的 curl 命令：
+  POST {base}/api/devices/{device_id}/display，Content-Type: application/octet-stream
+后端会校验 .film 头（尺寸 792×528、总长 209120）并发布为新版本，设备下次轮询时下载。
+菜单渲染、AI 推荐、四张一套的发布都在后端与 Android 侧，不在本工具内重复实现。</div>
+    </div>
+  </section>
+</div>
+
+<!-- 日志常驻：切 tab 不影响 -->
+<div class="logdock">
+  <div class="head">
+    <h2>日志</h2>
+    <button class="ghost" id="logClear" style="padding:4px 12px">清空</button>
+    <span class="muted">← 通知帧按 opcode 解码，未知帧打印原始 hex</span>
+  </div>
+  <div class="log" id="bleLog"></div>
+</div>
+<script>
+/* ============================ 调色板与设备契约 ============================ */
+// index -> {name, rgb, cb}；cb=写入 .film colorTable 的真实设备色值字节，固件 color_lut[cb] 取色号
+const PALETTE = [
+  { name: '黑', rgb: [0, 0, 0],       cb: 0x00 },
+  { name: '白', rgb: [255, 255, 255], cb: 0xFF },
+  { name: '黄', rgb: [255, 255, 0],   cb: 0xFC },
+  { name: '红', rgb: [255, 0, 0],     cb: 0xE0 },
+  { name: '蓝', rgb: [0, 0, 255],     cb: 0x03 },
+  { name: '绿', rgb: [41, 204, 20],   cb: 0x1C },
+];
+// 唯一目标设备：智能冰箱贴六色电子纸（旧硬件规格已下线，不再提供选项）
+const D = { w: 792, h: 528, layout: 'row-major' };
+const HEADER_SIZE = 32;
+
+/* ============================ 色彩转换（移植自 FilmEncoder.kt） ============================ */
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0; const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+    h *= 360;
+  }
+  return { h, s, l };
+}
+function rgbToLab(r, g, b) {
+  let R = r / 255, G = g / 255, B = b / 255;
+  R = R > 0.04045 ? Math.pow((R + 0.055) / 1.055, 2.4) : R / 12.92;
+  G = G > 0.04045 ? Math.pow((G + 0.055) / 1.055, 2.4) : G / 12.92;
+  B = B > 0.04045 ? Math.pow((B + 0.055) / 1.055, 2.4) : B / 12.92;
+  R *= 100; G *= 100; B *= 100;
+  let x = R * 0.4124 + G * 0.3576 + B * 0.1805;
+  let y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+  let z = R * 0.0193 + G * 0.1192 + B * 0.9505;
+  x /= 95.047; y /= 100; z /= 108.883;
+  x = x > 0.008856 ? Math.cbrt(x) : (7.787 * x) + 16 / 116;
+  y = y > 0.008856 ? Math.cbrt(y) : (7.787 * y) + 16 / 116;
+  z = z > 0.008856 ? Math.cbrt(z) : (7.787 * z) + 16 / 116;
+  return { l: 116 * y - 16, a: 500 * (x - y), b: 200 * (y - z) };
+}
+function labDist(a, b) {
+  const dl = a.l - b.l, da = a.a - b.a, db = a.b - b.b;
+  return Math.sqrt(dl * dl + da * da + db * db);
+}
+const paletteHsl = PALETTE.map(p => rgbToHsl(p.rgb[0], p.rgb[1], p.rgb[2]));
+// 返回调色板索引 0..5
+function findClosestIndex(r, g, b) {
+  const inp = rgbToHsl(r, g, b);
+  if (inp.s < 0.12) return inp.l > 0.5 ? 1 : 0; // 低饱和 -> 白/黑
+  let minD = Infinity, chosen = 0;
+  for (let i = 2; i < PALETTE.length; i++) {
+    const p = paletteHsl[i];
+    let hd = Math.abs(inp.h - p.h); if (hd > 180) hd = 360 - hd;
+    const sd = Math.abs(inp.s - p.s), ld = Math.abs(inp.l - p.l);
+    const d = hd + sd * 120 + ld * 80;
+    if (d < minD) { minD = d; chosen = i; }
+  }
+  const li = rgbToLab(r, g, b);
+  const dBlack = labDist(li, rgbToLab(0, 0, 0));
+  const dWhite = labDist(li, rgbToLab(255, 255, 255));
+  const dNeutral = Math.min(dBlack, dWhite);
+  const neutral = dBlack < dWhite ? 0 : 1;
+  const c = PALETTE[chosen].rgb;
+  const dChosen = labDist(li, rgbToLab(c[0], c[1], c[2]));
+  return dNeutral < dChosen * 0.45 ? neutral : chosen;
+}
+/* ============================ 量化（最近色） ============================ */
+function quantize(img, w, h) {
+  const idx = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < w * h; i++, p += 4) {
+    idx[i] = findClosestIndex(img.data[p], img.data[p + 1], img.data[p + 2]);
+  }
+  return idx;
+}
+/* ============================ .film 组包（固定 Pro） ============================ */
+function buildFilm(idxArray) {
+  const { w, h, layout } = D;
+  const pixelBytes = (w * h) / 2;
+  const out = new Uint8Array(HEADER_SIZE + pixelBytes);
+  out[0] = pixelBytes & 0xFF; out[1] = (pixelBytes >> 8) & 0xFF;
+  out[2] = (pixelBytes >> 16) & 0xFF; out[3] = (pixelBytes >> 24) & 0xFF;
+  out[4] = w & 0xFF; out[5] = (w >> 8) & 0xFF;
+  out[6] = h & 0xFF; out[7] = (h >> 8) & 0xFF;
+  out[8] = 6;
+  for (let i = 0; i < PALETTE.length; i++) out[16 + i] = PALETTE[i].cb; // 真实色值字节
+  const base = HEADER_SIZE;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const code = idxArray[y * w + x] & 0x0F;
+      const lin = layout === 'row-major' ? (y * w + x) : (x * h + (h - 1 - y));
+      const bi = base + (lin >> 1);
+      if ((lin & 1) === 0) out[bi] = (out[bi] & 0x0F) | (code << 4);
+      else out[bi] = (out[bi] & 0xF0) | code;
+    }
+  }
+  return out;
+}
+/* ============================ 渲染工具 ============================ */
+function drawIndexToCanvas(idxArray, w, h, canvas) {
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const im = ctx.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    const rgb = PALETTE[idxArray[i]].rgb;
+    im.data[i * 4] = rgb[0]; im.data[i * 4 + 1] = rgb[1]; im.data[i * 4 + 2] = rgb[2]; im.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+}
+function fitToImageData(srcImg, w, h, fit) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  const iw = srcImg.width, ih = srcImg.height;
+  let dw = w, dh = h, dx = 0, dy = 0;
+  if (fit === 'cover') {
+    const s = Math.max(w / iw, h / ih); dw = iw * s; dh = ih * s; dx = (w - dw) / 2; dy = (h - dh) / 2;
+  } else if (fit === 'contain') {
+    const s = Math.min(w / iw, h / ih); dw = iw * s; dh = ih * s; dx = (w - dw) / 2; dy = (h - dh) / 2;
+  }
+  ctx.drawImage(srcImg, dx, dy, dw, dh);
+  return ctx.getImageData(0, 0, w, h);
+}
+
+/* ============================ 全局状态 ============================ */
+let currentFilm = null;      // Uint8Array，直传作用于它
+let currentImg = null;
+let otaFirmware = null;
+let bleConnected = false;
+let bleBusy = false;         // 传输中：期间禁掉所有写入按钮，避免帧交错把状态机搞乱
+let filmQueue = [];          // 连发队列 [{name, film}]，按文件名排序 = 设备轮播顺序
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = id => document.getElementById(id);
+
+/* ============================ 日志 ============================ */
+const logEl = $('bleLog');
+function bleLog(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+$('logClear').onclick = () => { logEl.textContent = ''; };
+const hex = arr => [...arr].map(x => x.toString(16).padStart(2, '0')).join(' ');
+
+/* ============================ 按钮可用性 ============================ */
+// 所有"要写设备"的按钮统一在这里开关。散在各处的 disabled 赋值必然漏一个，
+// 而漏掉的那个恰好在传输中被点下去，就是一次状态机错乱 + 一份废掉的传输。
+function updateSendButtons() {
+  const ready = bleConnected && !bleBusy;
+  $('bleSend').disabled = !(ready && !!currentFilm);
+  $('bleSendSet').disabled = !(ready && filmQueue.length > 0);
+  ['bleClearAll', 'bleListFiles', 'bleDisplayNow'].forEach(id => $(id).disabled = !ready);
+  document.querySelectorAll('.dev-btn').forEach(b => b.disabled = !ready);
+  $('bleConnect').disabled = bleBusy || bleConnected;
+  $('bleDisconnect').disabled = !bleConnected || bleBusy;
+  $('otaSend').disabled = !(ready && !!otaFirmware);
+}
+function setBusy(on) { bleBusy = on; updateSendButtons(); }
+
+// 从 .film 实际字节解回调色板索引（与 buildFilm 的 row-major / 高 nibble 先严格对应），
+// 用于「所见即设备将显示」的预览：预览正常但设备白屏 => 问题在固件侧而非工具生成。
+function filmToIdx(film) {
+  const w = D.w, h = D.h, base = HEADER_SIZE, n = w * h;
+  const idx = new Uint8Array(n);
+  for (let lin = 0; lin < n; lin++) {
+    const b = film[base + (lin >> 1)] || 0;
+    const code = (lin & 1) === 0 ? (b >> 4) & 0x0F : b & 0x0F;
+    idx[lin] = code < PALETTE.length ? code : 1; // 越界索引回落为白，避免预览崩溃
+  }
+  return idx;
+}
+function updateBlePreview() {
+  const box = $('blePreviewBox');
+  if (!currentFilm) { box.style.display = 'none'; return; }
+  drawIndexToCanvas(filmToIdx(currentFilm), D.w, D.h, $('blePreview'));
+  box.style.display = 'block';
+}
+// 生成任何 .film（图片/图案）后调用：更新全局"当前待传"状态并联动按钮
+function setCurrentFilm(film, source) {
+  currentFilm = film;
+  const el = $('filmStatus');
+  el.textContent = source + ' · ' + film.length + ' B';
+  el.style.color = 'var(--ok)';
+  updateBlePreview();
+  updateSendButtons();
+}
+function setConnected(on, name) {
+  bleConnected = on;
+  $('dotBle').classList.toggle('on', on);
+  $('bleStatus').textContent = on ? ('已连接：' + (name || '设备')) : '蓝牙未连接';
+  updateSendButtons();
+}
+
+/* ============================ UI: tabs ============================ */
+const TABS = ['convert', 'pattern', 'ble', 'device', 'ota', 'about'];
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  TABS.forEach(n => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+});
+function switchToBle() { document.querySelector('.tab[data-tab=ble]').click(); }
+
+/* 调色板色卡 */
+const sw = $('swatches');
+PALETTE.forEach(p => {
+  const d = document.createElement('div'); d.className = 'sw';
+  d.style.background = `rgb(${p.rgb.join(',')})`; d.title = p.name;
+  sw.appendChild(d);
+});
+
+/* ============================ 图片转换 ============================ */
+const drop = $('drop'), fileInput = $('file');
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]); };
+fileInput.onchange = () => { if (fileInput.files[0]) loadImage(fileInput.files[0]); };
+$('fit').onchange = regenerate;
+function loadImage(file) {
+  const img = new Image();
+  img.onload = () => { currentImg = img; drop.textContent = file.name; regenerate(); };
+  img.src = URL.createObjectURL(file);
+}
+function regenerate() {
+  if (!currentImg) return;
+  const srcData = fitToImageData(currentImg, D.w, D.h, $('fit').value);
+  const cs = $('cvsSrc'); cs.width = D.w; cs.height = D.h;
+  cs.getContext('2d').putImageData(srcData, 0, 0);
+  const idx = quantize(srcData, D.w, D.h);
+  drawIndexToCanvas(idx, D.w, D.h, $('cvsOut'));
+  const film = buildFilm(idx);
+  showInfo(film, $('info'));
+  wireDownload(film, 'image.film', 'dlLink', 'download');
+  $('toBle').disabled = false;
+  setCurrentFilm(film, '图片');
+}
+function showInfo(film, el) {
+  el.innerHTML =
+    `尺寸: <b>${D.w} × ${D.h}</b> · row-major\n` +
+    `像素数据: <b>${(D.w * D.h) / 2}</b> B · 文件总大小: <b>${film.length}</b> B\n` +
+    (film.length === 209120 ? '✓ 符合 792×528 契约（209120 B）' : '⚠ 与契约不符');
+}
+function wireDownload(film, name, linkId, btnId) {
+  const blob = new Blob([film], { type: 'application/octet-stream' });
+  const link = $(linkId);
+  link.href = URL.createObjectURL(blob); link.download = name;
+  $(btnId).disabled = false;
+}
+$('toBle').onclick = switchToBle;
+
+/* ============================ 上传到后端：生成 curl ============================ */
+// Token 用 shell 变量引用而不是让用户填进输入框：这个页面可能开在任何机器上，
+// 把长期有效的 API Token 打进网页表单（进而可能被保存进浏览器）没有必要 ——
+// 反正命令最终要在终端执行，那里本来就有环境变量。
+function buildCurl() {
+  const base = $('curlBase').value.trim().replace(/\/+$/, '');
+  const dev = $('curlDevice').value.trim();
+  const name = $('curlFile').value.trim() || 'image.film';
+  if (!base || !dev) { $('curlMsg').textContent = '✗ 后端地址与 device_id 都要填'; return; }
+  const insecure = base.startsWith('https://') ? ' \\\n  --insecure' : '';
+  const cmd =
+    `curl -X POST "${base}/api/devices/${dev}/display" \\\n` +
+    `  -H "Authorization: Bearer $SFM_API_TOKEN" \\\n` +
+    `  -H "Content-Type: application/octet-stream" \\\n` +
+    `  --data-binary @${name}${insecure}`;
+  $('curlOut').textContent = cmd +
+    '\n\n# 先点上面「下载 .film」，然后在下载目录执行这条命令。' +
+    '\n# SFM_API_TOKEN 取后端的同名环境变量；后端未设 token 时可删掉 Authorization 那一行。' +
+    (insecure ? '\n# --insecure 是给自签证书用的；正式证书请去掉。' : '');
+  $('curlCopy').disabled = false;
+  $('curlMsg').textContent = '';
+}
+$('curlGen').onclick = buildCurl;
+$('curlCopy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($('curlOut').textContent);
+    $('curlMsg').textContent = '✓ 已复制';
+  } catch (e) { $('curlMsg').textContent = '✗ 复制失败，请手动选中：' + e.message; }
+};
+
+/* ============================ 测试图案 ============================ */
+function genPattern(type) {
+  const { w, h } = D;
+  const idx = new Uint8Array(w * h);
+  const set = (x, y, c) => { idx[y * w + x] = c; };
+  if (type.startsWith('solid-')) {
+    const map = { 'solid-black': 0, 'solid-white': 1, 'solid-yellow': 2, 'solid-red': 3, 'solid-blue': 4, 'solid-green': 5 };
+    idx.fill(map[type]);
+  } else if (type === 'bars') {
+    const order = [0, 1, 2, 3, 4, 5];
+    for (let x = 0; x < w; x++) { const c = order[Math.floor(x / (w / 6)) % 6]; for (let y = 0; y < h; y++) set(x, y, c); }
+  } else if (type === 'checker') {
+    const s = 8; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) set(x, y, ((x / s | 0) + (y / s | 0)) & 1 ? 0 : 1);
+  } else if (type === 'grad') {
+    for (let x = 0; x < w; x++) { const c = Math.min(5, Math.floor(x / (w / 6))); for (let y = 0; y < h; y++) set(x, y, c); }
+  } else if (type === 'orient') {
+    idx.fill(1);
+    for (let y = 0; y < h / 5; y++) for (let x = 0; x < w / 5; x++) set(x, y, 3);
+    for (let y = 0; y < 12; y++) for (let x = 0; x < w; x++) set(x, y, 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < 12; x++) set(x, y, 5);
+    for (let y = 0; y < h; y++) for (let x = (w / 2 - 3 | 0); x < (w / 2 + 3 | 0); x++) set(x, y, 0);
+    for (let x = 0; x < w; x++) for (let y = (h / 2 - 3 | 0); y < (h / 2 + 3 | 0); y++) set(x, y, 0);
+  }
+  return idx;
+}
+function regeneratePattern() {
+  const type = $('patternType').value;
+  const idx = genPattern(type);
+  drawIndexToCanvas(idx, D.w, D.h, $('cvsPat'));
+  const film = buildFilm(idx);
+  showInfo(film, $('patInfo'));
+  wireDownload(film, type + '.film', 'dlPatLink', 'downloadPat');
+  setCurrentFilm(film, '测试图案');
+}
+$('patternType').onchange = regeneratePattern;
+$('patToBle').onclick = () => { regeneratePattern(); switchToBle(); };
+
+/* ============================ Web Bluetooth ============================ */
+const BLE = {
+  SERVICE: 0x2000, WRITE: 0x2001, NOTIFY: 0x2001, NOTIFY2: 0x2002, NOTIFY3: 0x2003,
+  HEAD: 0x55,
+  CH_FILE_NAME: 0x00, CH_FILE_LEN: 0x01, CH_FILE_DATA: 0x02,
+  CH_FILE_START: 0x03, CH_FILE_STOP: 0x04, CH_FILE_DISPLAY: 0x07,
+  CH_FILE_DELETE: 0x05, CH_FILE_LIST: 0x06,
+  // OTA_START(0x12) 固件未实现，序列是 LEN → DATA* → STOP，故不定义。
+  CH_OTA_LEN: 0x10, CH_OTA_DATA: 0x11, CH_OTA_STOP: 0x13,
+  CH_BATTERY: 0x23,
+  CH_SLEEP_ONOFF: 0x25, CH_SLEEP_ONOFF_GET: 0x26,
+  CH_WIFI_ENABLE: 0x30,
+  CH_WIFI_SSID: 0x32, CH_WIFI_PASSWORD: 0x34, CH_WIFI_CONNECT: 0x38,
+  CH_WIFI_CONNECT_GET: 0x3A, CH_SYNC_STATUS_GET: 0x3D,
+  CH_MANIFEST_URL: 0x3E, CH_DEVICE_ID: 0x40, CH_DEVICE_TOKEN: 0x42,
+  CH_STATUS_ALL: 0x43,       // 合并状态查询，响应 8 + err_len 字节
+  CH_SYNC_NOW: 0x44,
+  CH_FILE_CLEAR_ALL: 0x45,   // 清空设备上全部 .film（不清屏）
+  CH_FILE_SILENT_RECV: 0x46, // 静默接收开关：只保存不上屏（连发多张时避免逐张刷屏）
+  CH_FILE_DISPLAY_NOW: 0x47, // 按当前做饭时段显示（窗口外显示今日总览）
+  CH_WAKE_SCHEDULE: 0x48, CH_WAKE_SCHEDULE_GET: 0x49,
+  CH_POLL_INTERVAL: 0x4A, CH_POLL_INTERVAL_GET: 0x4B,
+  CH_PIN_FILM: 0x4C, CH_PIN_FILM_GET: 0x4D,
+};
+/* 与固件常量对齐，不写死在校验分支里：写宽了本地放过、固件回笼统的 0xFF；
+ * 写窄了界面上选不到设备其实支持的值。 */
+const WAKE_MAX_SLOTS = 6;            // 固件 WAKE_SCHEDULE_MAX_SLOTS
+const WAKE_FALLBACK_MAX_MIN = 10080; // 7 天，见 docs/ble_protocol.md §4.11
+let bleDeviceObj = null, bleWriteChar = null;
+function checksum(bytes, n) { let s = 0; for (let i = 0; i < n; i++) s += bytes[i] & 0xFF; return s & 0xFF; }
+function buildPacket(ch, data = new Uint8Array(0)) {
+  const p = new Uint8Array(4 + data.length);
+  p[0] = BLE.HEAD; p[1] = ch; p[2] = data.length; p.set(data, 3);
+  p[3 + data.length] = checksum(p, 3 + data.length);
+  return p;
+}
+$('bleConnect').onclick = async () => {
+  if (!navigator.bluetooth) { bleLog('✗ 此浏览器不支持 Web Bluetooth（请用 Chrome / Edge）。'); return; }
+  if (bleBusy || bleConnected) return;
+  setBusy(true);
+  try {
+    bleLog('请求设备…（列表应只剩「智能冰箱贴」）');
+    // 固件广播带完整中文名 + scan response 带 Service 0x2000，可精确过滤；连接后用 0x2000 访问 GATT。
+    bleDeviceObj = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: '智能冰箱贴' }, { services: [BLE.SERVICE] }],
+      optionalServices: [BLE.SERVICE, 0x180a],
+    });
+    bleLog('连接 GATT…');
+    const server = await bleDeviceObj.gatt.connect();
+    const svc = await server.getPrimaryService(BLE.SERVICE);
+    bleWriteChar = await svc.getCharacteristic(BLE.WRITE);
+    // 固件可能从 CH1/CH2/CH3(0x2001/0x2002/0x2003) 任一发通知，全部订阅
+    let notifyOk = 0;
+    for (const nu of [BLE.NOTIFY, BLE.NOTIFY2, BLE.NOTIFY3]) {
+      try {
+        const nt = await svc.getCharacteristic(nu);
+        await nt.startNotifications();
+        nt.addEventListener('characteristicvaluechanged', e => {
+          handleNotify(new Uint8Array(e.target.value.buffer));
+        });
+        notifyOk++;
+      } catch (_) { /* 该特征不可通知则跳过 */ }
+    }
+    if (!notifyOk) bleLog('（未订阅到通知特征，仅能单向写入）');
+    bleDeviceObj.addEventListener('gattserverdisconnected', () => {
+      bleWriteChar = null; setBusy(false); setConnected(false); bleLog('⚠ 设备已断开。');
+    });
+    const nm = bleDeviceObj.name || bleDeviceObj.id;
+    bleLog('✓ 已连接: ' + nm);
+    setConnected(true, nm);
+  } catch (e) { bleLog('✗ 连接失败: ' + e.message); }
+  finally { setBusy(false); }
+};
+$('bleDisconnect').onclick = () => {
+  if (bleDeviceObj?.gatt.connected) bleDeviceObj.gatt.disconnect();
+  bleWriteChar = null; setBusy(false); setConnected(false); bleLog('已断开。');
+};
+// 固件端「一次 BLE 写入 = 一个完整命令包」（无跨写入重组），故每包整包单次写入。
+// 帧格式 HEAD|CH|LEN|DATA|SUM，LEN 只有一字节 → DATA ≤ 255，整帧 ≤ 259。
+const BLE_MAX_PACKET = 259;
+const BLE_PARSER_FILENAME_MAX = 128;
+// FILE_DATA 每帧数据字节数。conn_int 已协商到 15ms，带响应写一帧占两个连接事件
+// （30ms/帧），因此吞吐与帧载荷成正比：250/180 ≈ 1.39x，约 25s 传完一张。
+//
+// ⚠ 若传输一开始就卡住（进度长时间停在 0%、或设备侧无 "rx begin" 后续日志），
+//   原因几乎一定是浏览器协商的 ATT MTU 不足 254 字节：Web Bluetooth 无法查询协商后的 MTU，
+//   而超过 MTU-3 的写入会被浏览器自动改走 ATT Long Write（prepare + execute），
+//   固件只处理非 prepare 写，整帧会被静默丢弃。
+//   处置：把下面这个值改回 180 即可恢复；设备串口的 "ESP_GATTS_MTU_EVT, MTU N" 会给出真实协商值。
+const FILE_DATA_CHUNK = 250;
+let bleWriteQueue = Promise.resolve();
+function writeRaw(bytes) {
+  const packet = bytes.slice();
+  const device = bleDeviceObj;
+  const characteristic = bleWriteChar;
+  const task = bleWriteQueue.then(() => writeRawNow(packet, device, characteristic));
+  bleWriteQueue = task.catch(() => {});
+  return task;
+}
+async function writeRawNow(bytes, device, characteristic) {
+  // 连接已断开时给出可读原因。否则 bleWriteChar 为 null 会抛
+  // "Cannot read properties of null (reading 'writeValueWithResponse')"，
+  // 这个报错完全掩盖了真实原因（设备断连），排障时极易被带偏。
+  if (!characteristic || characteristic !== bleWriteChar ||
+      device !== bleDeviceObj || !device?.gatt?.connected)
+    throw new Error('设备已断开，无法继续写入。请重新连接后再试。');
+  if (bytes.length > BLE_MAX_PACKET)
+    throw new Error('BLE 包超出协议帧上限(' + BLE_MAX_PACKET + 'B): ' + bytes.length);
+  // 显式带响应写：特征 0x2001 同时声明 WRITE 与 WRITE_NR，废弃的 writeValue() 在多数浏览器会
+  // 降级为「无响应写」，导致 START 后连发的小控制包(NAME/LEN)丢失（传输卡在 STARTED、白屏）。
+  // 带响应写会等 ATT 确认，配合 await 串行，确保每包按序送达不丢。
+  if (characteristic.writeValueWithResponse) await characteristic.writeValueWithResponse(bytes);
+  else await characteristic.writeValue(bytes);
+}
+/** 发一条命令并记日志。所有单发命令都走这里，省掉各处重复的 try/catch 与未连接判断。 */
+async function sendCmd(ch, data, label) {
+  if (!bleWriteChar) { bleLog('✗ 未连接。'); return false; }
+  try {
+    await writeRaw(buildPacket(ch, data || new Uint8Array(0)));
+    bleLog('→ ' + label + '（0x' + ch.toString(16).toUpperCase().padStart(2, '0') + '）');
+    return true;
+  } catch (e) { bleLog('✗ ' + label + ' 失败: ' + e.message); return false; }
+}
+async function sendText(ch, text) { await writeRaw(buildPacket(ch, new TextEncoder().encode(text))); }
+
+function filmNameReject(name) {
+  const bytes = new TextEncoder().encode(name);
+  if (!name || bytes.length > BLE_PARSER_FILENAME_MAX)
+    return `长度需在 1–${BLE_PARSER_FILENAME_MAX} 字节`;
+  if (!/^[\x20-\x7E]+$/.test(name)) return '只允许可打印 ASCII 字符';
+  if (name.includes('/') || name.includes('\\') || name.includes('..'))
+    return '不能含路径分隔符或 ..';
+  if (!name.endsWith('.film') || name.length <= 5) return '须以 .film 结尾且有基名';
+  return null;
+}
+
+// 发送一张 .film 的完整帧序列。抽成函数供「单张直传」与「连发多张」共用。
+async function sendFilmOverBle(film, name, setPct) {
+  const bad = filmNameReject(name);
+  if (bad) throw new Error(`文件名不合法：${bad}`);
+  bleLog(`发送 ${film.length} B → ${name}`);
+  await writeRaw(buildPacket(BLE.CH_FILE_START));
+  // NAME 负载必须是「纯文件名字节」，绝不能带结尾 \0：固件 ble_filename_is_safe 明确拒绝任何
+  // 非打印字节（含 NUL 0x00），且接受后会自行在 filename[len] 补终止符。若多发 \0，整个
+  // FILE_NAME 被判 unsafe 拒绝 → 状态机停在 STARTED → 后续 DATA/STOP 全部乱序拒绝 → 设备白屏。
+  const nameBytes = new TextEncoder().encode(name);
+  await writeRaw(buildPacket(BLE.CH_FILE_NAME, nameBytes));
+  const L = film.length;
+  await writeRaw(buildPacket(BLE.CH_FILE_LEN, new Uint8Array([(L >> 24) & 255, (L >> 16) & 255, (L >> 8) & 255, L & 255])));
+  const CHUNK = FILE_DATA_CHUNK;
+  bleLog(`分片 ${CHUNK} B/帧（共 ${Math.ceil(L / CHUNK)} 帧）；若进度长时间停在 0%，见源码 FILE_DATA_CHUNK 注释`);
+  for (let off = 0; off < L; off += CHUNK) {
+    await writeRaw(buildPacket(BLE.CH_FILE_DATA, film.slice(off, off + CHUNK)));
+    if (setPct) setPct(Math.floor(off * 100 / L));
+    if ((off / CHUNK) % 16 === 0) await sleep(0);
+  }
+  await writeRaw(buildPacket(BLE.CH_FILE_STOP));
+  // FILE_STOP 成功后固件自动按文件名上屏；不要再发 FILE_DISPLAY(0)（会切回列表第 0 个旧图）。
+  if (setPct) setPct(100);
+}
+
+$('bleSend').onclick = async () => {
+  if (!currentFilm) { bleLog('✗ 没有可发送的 .film，请先在「图片 / 测试图案」生成。'); return; }
+  const bar = $('bleBar'), pctEl = $('blePct');
+  const setPct = v => { bar.style.width = v + '%'; pctEl.textContent = v + '%'; };
+  const name = $('bleFilename').value || 'debug.film';
+  setBusy(true);
+  try {
+    setPct(0);
+    await sendFilmOverBle(currentFilm, name, setPct);
+    bleLog('✓ 发送完成（固件已自动上屏刚传的图）。');
+  } catch (e) { bleLog('✗ 发送失败: ' + e.message); }
+  setBusy(false);
+};
+
+/* ============================ 连发多张 ============================ */
+// 设备侧侧边两键按 (current ± 1) % file_count 轮播文件列表，因此「一次下发多张、按键翻页」
+// 不需要任何新的 BLE 命令，只要把多张依次传完即可。
+// 文件按名排序发送，与固件列表顺序（按文件名排序）一致 —— 否则页面上的顺序与设备上的
+// 翻页顺序不是同一个，调"哪张排第几"时会一直对不上。
+$('setFiles').onchange = async () => {
+  const files = [...$('setFiles').files].sort((a, b) => a.name.localeCompare(b.name));
+  filmQueue = [];
+  for (const f of files) {
+    const bad = filmNameReject(f.name);
+    if (bad) {
+      bleLog(`⚠ 跳过 ${f.name}：文件名不合法（${bad}）`);
+      continue;
+    }
+    const buf = new Uint8Array(await f.arrayBuffer());
+    if (buf.length !== 209120) {
+      bleLog(`⚠ 跳过 ${f.name}：${buf.length} B，不是 209120 B`);
+      continue;
+    }
+    filmQueue.push({ name: f.name, film: buf });
+  }
+  $('setInfo').textContent = filmQueue.length
+    ? `${filmQueue.length} 张，发送顺序：${filmQueue.map(x => x.name).join(' → ')}`
+    : '没有合法的 .film';
+  updateSendButtons();
+};
+
+$('bleSendSet').onclick = async () => {
+  if (!filmQueue.length) { bleLog('✗ 还没有选择 .film。'); return; }
+  const bar = $('bleBar'), pctEl = $('blePct');
+  setBusy(true);
+  let silentOn = false;
+  try {
+    // 先清空设备上的旧 .film：否则历史版本（甚至上一版固件时代传的图）会一直留在存储里，
+    // 被侧边按键轮播翻出来。清空不清屏，当前画面保留到第一张新图上屏。
+    // 用 try 包住：未烧录新固件的设备不认识 0x45，不该因此中断整套发送。
+    if ($('clearBeforeSend').checked) {
+      bleLog('→ 清空设备旧图（0x45）');
+      try {
+        await writeRaw(buildPacket(BLE.CH_FILE_CLEAR_ALL));
+        // 固件收到即回 ACK（表示「已受理」），真正的删除在文件任务里异步进行：
+        // 删若干个 209120 字节的文件是 SD 卡 IO，需要时间。这里等足再传，
+        // 否则新文件可能与正在进行的删除操作抢同一个文件系统。
+        await sleep(1500);
+      } catch (e) { bleLog('⚠ 清空命令失败：' + e.message); }
+    }
+    // 清空这一步若把连接搞断了，后面所有写入都会失败，必须立即中止而不是继续硬发
+    // （否则会一路发到 sendFilmOverBle 里才报 null 错误，掩盖真实原因）。
+    if (!bleWriteChar || !bleDeviceObj?.gatt?.connected) {
+      bleLog('✗ 设备已断开，连发中止。'); setBusy(false); return;
+    }
+
+    // 关键：开启静默接收，让前面几张只保存不上屏。
+    // 电子纸刷一次约 20 秒，期间设备忙于送屏；若每张 FILE_STOP 都触发刷屏，
+    // 对端会在等待中 GATT 超时断连 —— 这正是「单张能发、连发多张必失败」的原因。
+    bleLog('→ 开启静默接收（0x46），传输期间不刷屏');
+    try {
+      await writeRaw(buildPacket(BLE.CH_FILE_SILENT_RECV, new Uint8Array([1])));
+      silentOn = true;
+      await sleep(100);
+    } catch (e) { bleLog('⚠ 静默接收不可用：' + e.message); }
+    if (!silentOn) {
+      bleLog('⚠ 未开启静默接收：将逐张刷屏（每张约 20 秒），很可能中途 GATT 超时断连。' +
+             '若固件已是新版仍失败，请先烧录最新固件。');
+    }
+    if (!bleWriteChar || !bleDeviceObj?.gatt?.connected) {
+      bleLog('✗ 设备已断开，连发中止。'); setBusy(false); return;
+    }
+
+    bleLog(`开始连发 ${filmQueue.length} 张`);
+    for (let i = 0; i < filmQueue.length; i++) {
+      const item = filmQueue[i];
+      const base = i * 100 / filmQueue.length;
+      const span = 100 / filmQueue.length;
+      const setPct = v => {
+        const total = Math.floor(base + v * span / 100);
+        bar.style.width = total + '%'; pctEl.textContent = total + '%';
+      };
+      bleLog(`[${i + 1}/${filmQueue.length}] ${item.name}`);
+      await sendFilmOverBle(item.film, item.name, setPct);
+      await sleep(400);   // 给固件留出提交与刷新文件列表的时间
+    }
+
+    // 全部传完后让设备按当前时间自己决定显示哪一张：做饭窗口内显示那一餐详情，
+    // 窗口外显示今日总览。这样中午下发直接就是午餐详情，不必先看总览再翻页。
+    const shown = await sendCmd(BLE.CH_FILE_DISPLAY_NOW, null, '按当前时段显示');
+
+    // 关闭静默放在 0x47 之后：先定好显示哪一张，再解除静默，避免多刷一次屏。
+    if (silentOn) {
+      try {
+        await writeRaw(buildPacket(BLE.CH_FILE_SILENT_RECV, new Uint8Array([0])));
+        silentOn = false;
+      } catch (e) { bleLog('⚠ 关闭静默失败：' + e.message); }
+    }
+
+    // 固件较旧不支持 0x47 时全程静默会导致一张都没上屏。
+    // 这里**不再**猜一个 FILE_DISPLAY 索引：0x07 的参数是设备侧 id，而设备按文件名排序，
+    // 本地数组下标与它没有对应关系 —— 原先发 `queue.length-1` 打开的其实是排在最后那个
+    // 文件名，日志却写着"已显示总览"。改成如实提示，让人用下面的文件列表点一张。
+    if (!shown) {
+      bleLog('⚠ 按时段显示不可用（固件较旧）：设备当前可能仍显示旧画面。' +
+             '请到「设备上的画面」刷新列表，手动点一张显示。');
+    }
+
+    bar.style.width = '100%'; pctEl.textContent = '100%';
+    bleLog('✓ 连发完成。设备正在刷屏（约 20 秒）；按侧边上/下键可手动翻页' +
+           '（手动后 30 分钟内不会被自动切换打断）。');
+  } catch (e) {
+    bleLog('✗ 连发失败: ' + e.message);
+    // 失败也要尽力关闭静默，否则设备会一直不上屏（断连时固件侧也会自动复位，这里是双保险）
+    if (silentOn) {
+      try {
+        await writeRaw(buildPacket(BLE.CH_FILE_SILENT_RECV, new Uint8Array([0])));
+        bleLog('→ 已关闭静默接收');
+      } catch (_) { /* 已断连则忽略 */ }
+    }
+  }
+  setBusy(false);
+};
+
+/* ============================ 设备文件管理（0x06 / 0x07 / 0x05 / 0x45 / 0x47）============================ */
+// 固件对 FILE_LIST 的响应是「每个文件一帧」，逐帧 Notify（帧间约 50ms）：
+//   [HEAD 0x55][CH 0x06][LEN 2+name_len][id][name_len][name...][SUM]
+// 没有「列表结束」标记，因此这里边收边累积，靠一个静默期判定收完。
+let deviceFiles = [];
+let fileListTimer = null;
+
+function renderDeviceFileList() {
+  const box = $('fileListBox'), info = $('fileListInfo');
+  box.innerHTML = '';
+  if (!deviceFiles.length) {
+    info.textContent = '设备上没有 .film（或设备未响应列表查询）。';
+    return;
+  }
+  info.textContent = `设备上共 ${deviceFiles.length} 张。轮播顺序 = 列表顺序（固件按文件名排序）。`;
+  for (const f of deviceFiles) {
+    const row = document.createElement('div');
+    row.className = 'btns'; row.style.margin = '6px 0';
+    const label = document.createElement('span');
+    label.style.cssText = 'min-width:220px;font:13px ui-monospace,Menlo,monospace';
+    label.textContent = `[${f.id}] ${f.name}`;
+    const showBtn = document.createElement('button');
+    showBtn.className = 'ghost'; showBtn.textContent = '显示这张';
+    showBtn.onclick = () => sendCmd(BLE.CH_FILE_DISPLAY, new Uint8Array([f.id]),
+      `显示 [${f.id}] ${f.name}，刷屏约 20 秒`);
+    const delBtn = document.createElement('button');
+    delBtn.className = 'ghost'; delBtn.textContent = '删除';
+    delBtn.onclick = async () => {
+      // 删除后设备侧 id 会重排，必须重新查询，否则按旧 id 继续操作会删错文件。
+      if (await sendCmd(BLE.CH_FILE_DELETE, new Uint8Array([f.id]), `删除 [${f.id}] ${f.name}`)) {
+        await sleep(300);
+        $('bleListFiles').click();
+      }
+    };
+    row.appendChild(label); row.appendChild(showBtn); row.appendChild(delBtn);
+    box.appendChild(row);
+  }
+}
+
+$('bleListFiles').onclick = async () => {
+  deviceFiles = [];
+  $('fileListInfo').textContent = '查询中…';
+  $('fileListBox').innerHTML = '';
+  if (await sendCmd(BLE.CH_FILE_LIST, null, '查询文件列表，等待逐帧通知')) {
+    // 无「列表结束」标记，若设备一张都没有则不会有任何通知，这里兜底提示
+    setTimeout(() => { if (!deviceFiles.length) renderDeviceFileList(); }, 1200);
+  }
+};
+$('bleDisplayNow').onclick = () => sendCmd(BLE.CH_FILE_DISPLAY_NOW, null,
+  '按当前时段显示（做饭窗口内显示那一餐，窗口外显示今日总览；未配网时时间不可信，直接显示总览）');
+$('bleClearAll').onclick = () => sendCmd(BLE.CH_FILE_CLEAR_ALL, null,
+  '清空全部 .film（不清屏，当前画面保留到下一张上屏）');
+
+/* ============================ 通知解码 ============================ */
+// 每一条通知都要能读懂。原先只解 0x06、其余打 hex，于是"查了状态但看不出结果"——
+// 而查询命令的全部价值就在响应里。
+const fmtMinute = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const PIN_MODES = { 0: 'OFF 未置顶', 1: 'ALWAYS 一直显示', 2: 'WINDOW 时段内显示', 3: 'OUTSIDE_MEAL 做饭时段外显示' };
+
+function showDev(text) { $('devStatus').textContent = text; bleLog('← ' + text.split('\n')[0]); }
+
+// 各 opcode 响应的最小载荷字节数。统一在 switch 之前判一次，而不是在每个分支里各写一遍：
+// 漏判的分支会在通知监听器里对 undefined 调 .toString() 抛 TypeError，于是一个异常帧
+// 从「打一行 hex」退化成静默失败 —— 而这个工具存在的意义正是让异常可见。
+const NOTIFY_MIN_LEN = {
+  0x43: 8,   // wifi + ver(4) + busy + bat + err_len
+  0x3A: 1, 0x3D: 2, 0x23: 1, 0x26: 1, 0x25: 1,
+  0x48: 1, 0x49: 3,   // 0x49: count + 至少 fallback(2)
+  0x4A: 1, 0x4B: 1,   // 正常 4 字节；1 字节是拒绝码，两者都合法
+  0x4C: 1, 0x4D: 1,   // 0x4D: mode=OFF 时只有 1 字节
+  0x45: 1, 0x47: 1, 0x44: 1,
+};
+
+function decodeNotify(op, p) {
+  const need = NOTIFY_MIN_LEN[op];
+  if (need === undefined) return null;          // 未登记的 opcode 交给 hex 打印
+  if (p.length < need) {
+    return `opcode 0x${op.toString(16).toUpperCase()}: 载荷只有 ${p.length} 字节，` +
+           `至少需要 ${need} —— 帧可能被截断（协商 MTU 不足？）`;
+  }
+  const u16 = i => (p[i] << 8) | p[i + 1];
+  switch (op) {
+    case BLE.CH_STATUS_ALL: {
+      if (p.length < 8) return null;
+      const ver = (p[1] << 24 | p[2] << 16 | p[3] << 8 | p[4]) >>> 0;
+      const errLen = p[7];
+      const err = errLen ? new TextDecoder().decode(p.slice(8, 8 + errLen)) : '（无）';
+      return `合并状态 0x43\n  Wi-Fi: ${p[0] ? '已连接' : '未连接'}\n  已应用版本: v${ver}\n` +
+             `  忙碌: ${p[5] ? '是' : '否'}\n  电量: ${p[6]}%\n  最近同步错误: ${err}`;
+    }
+    case BLE.CH_WIFI_CONNECT_GET:
+      return `Wi-Fi 连接状态 0x3A: ${p[0] ? '已连接' : '未连接'}`;
+    case BLE.CH_SYNC_STATUS_GET:
+      // 语义已收窄：只有 IDLE / DOWNLOADING，进度忙时报 0、空闲报 100。
+      return `取图状态 0x3D: ${p[0] === 0 ? 'IDLE 空闲' : 'DOWNLOADING 下载中'} · 进度 ${p[1]}%`;
+    case BLE.CH_BATTERY:
+      return `电量 0x23: ${p[0]}%`;
+    case BLE.CH_SLEEP_ONOFF_GET:
+      return `休眠模式 0x26: ${p[0] ? '开启' : '关闭'}`;
+    case BLE.CH_SLEEP_ONOFF:
+      return `休眠设置 0x25 应答: ${p[0] === 1 ? '成功' : '失败(0x' + p[0].toString(16) + ')'}`;
+    case BLE.CH_WAKE_SCHEDULE:
+      return `唤醒表设置 0x48 应答: ${p[0] === 1 ? '成功' : '被拒绝(0x' + p[0].toString(16) + ')'}`;
+    case BLE.CH_WAKE_SCHEDULE_GET: {
+      // 响应与 0x48 请求同布局：[count][slot_hi][slot_lo]…[fallback_hi][fallback_lo]
+      const n = p[0];
+      if (p.length < 1 + 2 * n + 2) return null;
+      const slots = [];
+      for (let i = 0; i < n; i++) slots.push(fmtMinute(u16(1 + i * 2)));
+      const fb = u16(1 + 2 * n);
+      return `唤醒时间表 0x49\n  唤醒点(${n}): ${slots.join(' / ') || '无'}\n` +
+             `  兜底周期: ${fb === 0 ? '关闭' : fb + ' 分钟'}`;
+    }
+    case BLE.CH_POLL_INTERVAL:
+    case BLE.CH_POLL_INTERVAL_GET: {
+      if (p.length === 1) return `轮询周期 0x${op.toString(16)}: 被拒绝(0x${p[0].toString(16)})`;
+      if (p.length < 4) return null;
+      const s = (p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]) >>> 0;
+      // 设置命令的响应是**钳制后**的实际生效值，可能与刚发的不同。
+      return `轮询周期 0x${op.toString(16).toUpperCase()}: ${s} 秒（${(s / 60).toFixed(1)} 分钟）`;
+    }
+    case BLE.CH_PIN_FILM:
+      return `置顶设置 0x4C 应答: ${p[0] === 1 ? '成功' : '被拒绝(0x' + p[0].toString(16) + ')'}`;
+    case BLE.CH_PIN_FILM_GET: {
+      // 响应与 0x4C 请求同布局：[mode][start_hi][start_lo][end_hi][end_lo][name_len][name…]
+      if (p.length < 1) return null;
+      const mode = p[0];
+      if (mode === 0) return '置顶画面 0x4D: OFF 未置顶（按菜单逻辑自动选图）';
+      if (p.length < 6) return null;
+      const nameLen = p[5];
+      const name = new TextDecoder().decode(p.slice(6, 6 + nameLen)).replace(/\0+$/, '');
+      let win = '';
+      if (mode === 2) {
+        const s = u16(1), e = u16(3);
+        win = s === e ? '\n  窗口: 空窗口（恒不显示）'
+                      : `\n  窗口: ${fmtMinute(s)}–${fmtMinute(e)}${s > e ? '（跨午夜）' : ''}`;
+      }
+      return `置顶画面 0x4D\n  模式: ${PIN_MODES[mode] || '未知(' + mode + ')'}${win}\n  文件: ${name}`;
+    }
+    case BLE.CH_FILE_CLEAR_ALL:
+      return p[0] === 0xFF ? '清空 0x45: 失败' : `清空 0x45: 已删除 ${p[0]} 个文件`;
+    case BLE.CH_FILE_DISPLAY_NOW:
+      return p[0] === 0xFF
+        ? '按时段显示 0x47: 失败（设备上没有匹配的 .film？）'
+        : `按时段显示 0x47: 已选中文件索引 ${p[0]}`;
+    case BLE.CH_SYNC_NOW:
+      return `SYNC_NOW 0x44: ${p[0] === 1 ? '已受理并触发' : '未受理(0x' + p[0].toString(16) + ')'}`;
+    default:
+      return null;
+  }
+}
+
+function handleNotify(v) {
+  if (v.length < 4 || v[0] !== BLE.HEAD) { bleLog('← 未知帧: ' + hex(v)); return; }
+  const op = v[1], len = v[2];
+  // 校验声明长度与和校验，两条都不通过就只打 hex。
+  //
+  // 不校验的后果不是「少一层保险」，而是**把坏帧当好帧展示**：`slice(3, 3+len)` 在帧被
+  // 截断时（例如 0x43 的 8+err_len 载荷超过浏览器协商到的 MTU）会安静地给出一段短载荷，
+  // 解码函数照常算出一个电量、一个版本号，而那些数字是错的。排障工具给出错误读数，
+  // 比它什么都不说糟得多。
+  if (v.length !== 4 + len) {
+    bleLog(`← 帧长度不符（声明 ${len} 字节载荷、实际收到 ${v.length - 4}）: ` + hex(v));
+    return;
+  }
+  if (checksum(v, 3 + len) !== v[3 + len]) {
+    bleLog(`← 帧校验和不符（算得 0x${checksum(v, 3 + len).toString(16)}、` +
+           `帧内 0x${v[3 + len].toString(16)}）: ` + hex(v));
+    return;
+  }
+  const p = v.slice(3, 3 + len);
+
+  // 文件列表单独处理：它是多帧累积，且要渲染成可点的列表。
+  if (op === BLE.CH_FILE_LIST) {
+    if (p.length < 2) return;
+    const id = p[0], nameLen = p[1];
+    // 固件在名字里带了结尾 NUL（name_len = strlen+1），解码时去掉
+    const name = new TextDecoder().decode(p.slice(2, 2 + nameLen)).replace(/\0+$/, '');
+    if (!deviceFiles.some(f => f.id === id)) deviceFiles.push({ id, name });
+    // 帧间隔 50ms，静默 600ms 视为列表接收完毕
+    if (fileListTimer) clearTimeout(fileListTimer);
+    fileListTimer = setTimeout(() => {
+      deviceFiles.sort((a, b) => a.id - b.id);
+      renderDeviceFileList();
+    }, 600);
+    return;
+  }
+
+  const decoded = decodeNotify(op, p);
+  if (decoded) showDev(decoded);
+  else bleLog('← 通知 0x' + op.toString(16).toUpperCase().padStart(2, '0') + ': ' + hex(p));
+}
+
+/* ============================ 状态查询按钮 ============================ */
+$('qStatusAll').onclick = () => sendCmd(BLE.CH_STATUS_ALL, null, '查询合并状态');
+$('qWifi').onclick = () => sendCmd(BLE.CH_WIFI_CONNECT_GET, null, '查询 Wi-Fi 状态');
+$('qSync').onclick = () => sendCmd(BLE.CH_SYNC_STATUS_GET, null, '查询取图状态');
+$('qBattery').onclick = () => sendCmd(BLE.CH_BATTERY, null, '查询电量');
+$('qSleep').onclick = () => sendCmd(BLE.CH_SLEEP_ONOFF_GET, null, '查询休眠状态');
+$('qWake').onclick = () => sendCmd(BLE.CH_WAKE_SCHEDULE_GET, null, '查询唤醒时间表');
+$('qPoll').onclick = () => sendCmd(BLE.CH_POLL_INTERVAL_GET, null, '查询轮询周期');
+$('qPin').onclick = () => sendCmd(BLE.CH_PIN_FILM_GET, null, '查询置顶画面');
+
+/* ============================ 休眠 ============================ */
+// sleep_mode 持久化在 NVS，固件里改默认值只对首次启动/恢复出厂生效
+// ——**已经烧录过的设备仍是旧值**。所以要让省电真正生效，必须显式发这条命令一次。
+async function setSleepMode(on) {
+  if (!await sendCmd(BLE.CH_SLEEP_ONOFF, new Uint8Array([on ? 1 : 0]),
+      on ? '开启休眠（空闲约 60s 后深睡，按设备右键唤醒并开 60s 可连接窗口）'
+         : '关闭休眠（设备常驻不睡，会持续耗电，用完请重新开启）')) return;
+  await sleep(150);
+  await sendCmd(BLE.CH_SLEEP_ONOFF_GET, null, '回读休眠状态');
+}
+$('bleSleepOn').onclick = () => setSleepMode(true);
+$('bleSleepOff').onclick = () => setSleepMode(false);
+
+/* ============================ 唤醒时间表 / 轮询周期 ============================ */
+/** "HH:MM" -> 当日分钟数；不合法返回 null。 */
+function parseHhMm(s) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  const hh = +m[1], mm = +m[2];
+  if (hh > 23 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+$('setWake').onclick = async () => {
+  const raw = $('wakeSlots').value.split(',').map(s => s.trim()).filter(Boolean);
+  const slots = [];
+  for (const s of raw) {
+    const m = parseHhMm(s);
+    if (m === null) { bleLog(`✗ 唤醒时刻 "${s}" 格式不对，应为 HH:MM`); return; }
+    slots.push(m);
+  }
+  // 上限对齐固件的 WAKE_SCHEDULE_MAX_SLOTS(6) 与 fallback 上界(10080 分钟 = 7 天)。
+  // 写宽了的后果是本地放过、固件回一个笼统的 0xFF —— 那条 ack 不区分「哪一项越界」，
+  // 于是用户配 7 个饭点只会看到「被拒绝」，看不出是数量超了。
+  if (slots.length > WAKE_MAX_SLOTS) {
+    bleLog(`✗ 唤醒时刻最多 ${WAKE_MAX_SLOTS} 个（固件上限）`); return;
+  }
+  const fb = parseInt($('wakeFallback').value, 10);
+  if (!(fb >= 0 && fb <= WAKE_FALLBACK_MAX_MIN)) {
+    bleLog(`✗ 兜底周期需在 0–${WAKE_FALLBACK_MAX_MIN} 分钟`); return;
+  }
+  // 布局：[count][slot_hi][slot_lo]…[fallback_hi][fallback_lo]，长度恒为 1 + 2*count + 2
+  const data = new Uint8Array(1 + slots.length * 2 + 2);
+  data[0] = slots.length;
+  slots.forEach((m, i) => { data[1 + i * 2] = m >> 8; data[2 + i * 2] = m & 0xFF; });
+  data[1 + slots.length * 2] = fb >> 8;
+  data[2 + slots.length * 2] = fb & 0xFF;
+  // 0x48 是**全量替换**：这里发什么设备就只剩什么，留空即清掉全部饭点唤醒点。
+  await sendCmd(BLE.CH_WAKE_SCHEDULE, data,
+    `设置唤醒表：${slots.map(fmtMinute).join('/') || '无饭点'} + 兜底 ${fb === 0 ? '关闭' : fb + '分钟'}`);
+};
+$('setPoll').onclick = async () => {
+  const s = parseInt($('pollSeconds').value, 10);
+  if (!(s > 0)) { bleLog('✗ 轮询周期需为正整数秒'); return; }
+  await sendCmd(BLE.CH_POLL_INTERVAL,
+    new Uint8Array([(s >> 24) & 255, (s >> 16) & 255, (s >> 8) & 255, s & 255]),
+    `设置轮询周期 ${s} 秒（固件会钳制，响应是实际生效值）`);
+};
+
+/* ============================ 置顶画面 ============================ */
+// 与固件 film_pin_cfg_is_valid() 的文件名规则逐条对齐。在这里拦下来，
+// 比让设备回一个笼统的 0xFF 更有用 —— 0xFF 不区分"名字不合法"与"模式不认识"。
+const PIN_RESERVED = ['today', 'breakfast', 'lunch', 'dinner'];
+function pinNameReject(name) {
+  if (!name || name.length > 31) return '长度需在 1–31 字符';
+  if (!/^[0-9A-Za-z._-]+$/.test(name)) return '只允许 [0-9A-Za-z._-]';
+  if (name === '.' || name === '..' || name.includes('..')) return '不能含 .. 或为 . / ..';
+  if (!name.endsWith('.film') || name.length <= 5) return '须以 .film 结尾且有基名';
+  for (const k of PIN_RESERVED) if (name.includes(k)) return `不能含菜单关键字 ${k}`;
+  return null;
+}
+$('setPin').onclick = async () => {
+  const mode = parseInt($('pinMode').value, 10);
+  const name = $('pinName').value.trim();
+  const bad = pinNameReject(name);
+  if (bad) { bleLog('✗ 文件名不合法：' + bad); return; }
+  let start = 0, end = 0;
+  if (mode === 2) {
+    start = parseHhMm($('pinStart').value);
+    end = parseHhMm($('pinEnd').value);
+    if (start === null || end === null) { bleLog('✗ 窗口时间格式应为 HH:MM'); return; }
+  }
+  const nameBytes = new TextEncoder().encode(name);
+  // 布局：[mode][start_hi][start_lo][end_hi][end_lo][name_len][name…]，长度恒为 6 + name_len
+  const data = new Uint8Array(6 + nameBytes.length);
+  data[0] = mode;
+  data[1] = start >> 8; data[2] = start & 0xFF;
+  data[3] = end >> 8;   data[4] = end & 0xFF;
+  data[5] = nameBytes.length;
+  data.set(nameBytes, 6);
+  await sendCmd(BLE.CH_PIN_FILM, data, `设置置顶：${PIN_MODES[mode]} · ${name}`);
+  await sleep(150);
+  await sendCmd(BLE.CH_PIN_FILM_GET, null, '回读置顶配置');
+};
+$('clearPin').onclick = async () => {
+  // mode = OFF 时固件允许只发 1 字节，等于擦掉整条记录。
+  await sendCmd(BLE.CH_PIN_FILM, new Uint8Array([0]), '取消置顶');
+  await sleep(150);
+  await sendCmd(BLE.CH_PIN_FILM_GET, null, '回读置顶配置');
+};
+
+/* ============================ Wi-Fi 配网 / 同步 ============================ */
+$('bleProvision').onclick = async () => {
+  if (!bleWriteChar) { bleLog('✗ 未连接。'); return; }
+  const ssid = $('wpSsid').value.trim();
+  const pass = $('wpPass').value;
+  const manifest = $('wpManifest').value.trim();
+  const token = $('wpToken').value;
+  const deviceId = $('wpDeviceId').value.trim();
+  if (manifest && !manifest.startsWith('https://')) {
+    bleLog('✗ manifest_url 必须使用 https://，已取消配网。');
+    return;
+  }
+  setBusy(true);
+  try {
+    // Wi-Fi 总开关默认是关的（factory reset / 首次启动即为 0），必须显式开启，
+    // 否则后面的 0x38 连接请求会被 service_wifi_connect() 直接拒绝
+    // （日志：service_wifi_init "WiFi disabled, skip init" + "WiFi init failed"），
+    // 且不会有任何 BLE 层面的错误回包 —— 现象是"配网/SYNC_NOW 都显示已发送，
+    // 但 0x3A 查询永远是未连接"，很容易误以为是网络或证书问题。
+    await writeRaw(buildPacket(BLE.CH_WIFI_ENABLE, new Uint8Array([1])));
+    bleLog('→ 开启 Wi-Fi 总开关（0x30=1）');
+    await sleep(80);
+    if (ssid) { await sendText(BLE.CH_WIFI_SSID, ssid); bleLog('→ 设置 SSID: ' + ssid); await sleep(80); }
+    if (pass) { await sendText(BLE.CH_WIFI_PASSWORD, pass); bleLog('→ 设置密码 ***'); await sleep(80); }
+    if (manifest) { await sendText(BLE.CH_MANIFEST_URL, manifest); bleLog('→ 设置 manifest_url: ' + manifest); await sleep(80); }
+    if (deviceId) { await sendText(BLE.CH_DEVICE_ID, deviceId); bleLog('→ 设置 device_id: ' + deviceId); await sleep(80); }
+    if (token) { await sendText(BLE.CH_DEVICE_TOKEN, token); bleLog('→ 设置 device_token ***'); await sleep(80); }
+    await writeRaw(buildPacket(BLE.CH_WIFI_CONNECT));
+    bleLog('→ 触发连接 Wi-Fi（0x38）。等待设备连接 + SNTP…');
+  } catch (e) { bleLog('✗ 配网失败: ' + e.message); }
+  finally { setBusy(false); }
+};
+$('bleSyncNow').onclick = () => sendCmd(BLE.CH_SYNC_NOW, null,
+  'SYNC_NOW：设备将拉取 manifest 并按版本门控更新');
+
+/* ============================ 发送任意命令 ============================ */
+function hexToBytes(s) {
+  const parts = s.trim().split(/[\s,]+/).filter(Boolean);
+  const out = new Uint8Array(parts.length);
+  for (let i = 0; i < parts.length; i++) {
+    if (!/^[0-9a-fA-F]{1,2}$/.test(parts[i])) throw new Error('不是 hex 字节: ' + parts[i]);
+    out[i] = parseInt(parts[i], 16);
+  }
+  return out;
+}
+$('rawSend').onclick = async () => {
+  const opStr = $('rawOp').value.trim().replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]{1,2}$/.test(opStr)) { bleLog('✗ opcode 应为 1 字节 hex，如 4D'); return; }
+  const op = parseInt(opStr, 16);
+  let data;
+  try {
+    data = $('rawKind').value === 'hex'
+      ? hexToBytes($('rawPayload').value)
+      : new TextEncoder().encode($('rawPayload').value);
+  } catch (e) { bleLog('✗ 载荷解析失败: ' + e.message); return; }
+  if (data.length > 255) { bleLog('✗ 载荷超过 255 字节（LEN 字段只有一字节）'); return; }
+  await sendCmd(op, data, `手动发送 ${data.length} 字节载荷`);
+};
+
+/* ============================ 固件 OTA（OTA_LEN → OTA_DATA* → OTA_STOP）============================ */
+$('otaFile').onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    otaFirmware = new Uint8Array(r.result);
+    $('otaName').textContent = f.name + ' · ' + otaFirmware.length + ' B';
+    updateSendButtons();
+  };
+  r.readAsArrayBuffer(f);
+};
+$('otaSend').onclick = async () => {
+  if (!bleWriteChar) { bleLog('✗ 未连接设备，请先到「蓝牙传输」页连接。'); return; }
+  if (!otaFirmware) { bleLog('✗ 未选择固件 .bin。'); return; }
+  const bar = $('otaBar'), pctEl = $('otaPct'), L = otaFirmware.length;
+  const setPct = v => { bar.style.width = v + '%'; pctEl.textContent = v + '%'; };
+  setBusy(true);
+  try {
+    bleLog('开始 OTA，固件 ' + L + ' B');
+    await writeRaw(buildPacket(BLE.CH_OTA_LEN,
+      new Uint8Array([(L >> 24) & 255, (L >> 16) & 255, (L >> 8) & 255, L & 255])));
+    bleLog('→ OTA_LEN 已发送，等待设备擦除分区（~2s）…');
+    await sleep(2000);
+    // 刻意不跟随 FILE_DATA_CHUNK 提速：OTA 传坏的代价是设备变砖（需接线重刷），
+    // 而 180B 是已长期验证过的保守值。OTA 一次几分钟可以接受，不值得为省时间冒风险。
+    const CHUNK = 180;
+    setPct(0);
+    for (let off = 0; off < L; off += CHUNK) {
+      await writeRaw(buildPacket(BLE.CH_OTA_DATA, otaFirmware.slice(off, off + CHUNK)));
+      setPct(Math.floor(off * 100 / L));
+      if ((off / CHUNK) % 64 === 0) { bleLog('… OTA ' + Math.floor(off * 100 / L) + '%'); await sleep(0); }
+    }
+    await writeRaw(buildPacket(BLE.CH_OTA_STOP));
+    setPct(100);
+    bleLog('✓ 固件发送完成。设备将校验镜像、切换启动分区并重启。');
+  } catch (e) { bleLog('✗ OTA 失败: ' + e.message + '（BLE 断连或队列溢出可重试）'); }
+  setBusy(false);
+};
+
+/* ============================ 初始化 ============================ */
+regeneratePattern();   // 默认待传 = 测试图案，连上设备就能立刻验一次屏
+updateSendButtons();
+</script>
+</body>
+</html>

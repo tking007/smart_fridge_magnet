@@ -1,0 +1,10 @@
+CompileFlags:
+    # xtensa 特有的 -f*/-m* 开关（-mlongcalls 等）clang 不认，移除后才能解析。
+    Remove: [-f*, -m*]
+
+Diagnostics:
+    # 关掉未使用头文件检查：本项目多处依赖 include 顺序，clangd 判不出来。
+    # 典型误报是 freertos/FreeRTOS.h —— 它必须出现在 task.h/queue.h/timers.h 之前
+    # （那些头文件开头就 #error 要求如此），但 clangd 见符号可从 task.h 间接拿到便判其
+    # unused。按提示删除会直接编译失败。
+    UnusedIncludes: None

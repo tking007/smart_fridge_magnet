@@ -1,0 +1,13 @@
+# 版本按当前 .venv 实测可用组合 pin 住（原先全为 >= 开区间，不同机器解析出的版本不同，
+# 无法复现问题也无法保证部署一致）。升级时应显式改动此文件并重跑 tests/。
+flask==3.1.3
+flask-cors==6.0.5
+apscheduler==3.11.3
+requests==2.34.2
+Pillow==12.3.0
+python-dotenv==1.2.2
+# 三类模型统一走 Chat Completions 兼容协议，请求形状是一个 POST 加一层 JSON，
+# requests 足够，且允许语音服务使用扩展字段（见 src/ai_client.py）。
+
+# 生产 WSGI 服务器：app.run() 仅为开发服务器，不可用于对外部署。
+gunicorn==23.0.0

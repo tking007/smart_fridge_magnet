@@ -1,0 +1,30 @@
+# ruff 配置。
+#
+# 建这个文件的理由：此前没有配置，`ruff check src` 长期报 70+ 项，其中混着真问题
+# （吞掉 KeyboardInterrupt 的 bare except、未使用的导入）与刻意为之的写法。
+# 没有基线时两者混在一起，结果是整份输出都被当成噪音，真问题也就一直没人看。
+#
+# 现在真问题已清零，这里只声明**刻意为之**的豁免，让 `ruff check src` 回到干净状态——
+# 干净的基线才能让下一次新增的问题一眼可见。
+
+line-length = 100
+
+[lint]
+# 默认规则集（E/F）已经够用。新增规则请单独评估，不要为了数字好看而全开。
+
+[lint.per-file-ignores]
+# app.py 采用「分段导入 + 段间穿插初始化」的组织方式：
+#   from .logger import get_logger
+#   logger = get_logger('app')      <- 后面几段导入要用到它
+#   from .errors import ...
+# 以及把设备显示相关的导入放在对应的路由段之前（文件近 4000 行，按功能分段读起来
+# 比在顶部堆 40 行导入清楚）。硬搬到顶部只会让「这一段在做什么」更难看出来。
+"src/app.py" = ["E402"]
+
+# logger.py 在配置好日志目录之后才导入依赖它的模块，顺序本身是语义的一部分。
+"src/logger.py" = ["E402"]
+
+# 可选依赖探测：`try: import cv2, numpy / except ImportError: HAS_CV2 = False`。
+# numpy 在这里的作用就是「能不能导入」，删掉它 HAS_CV2 就永远为真，
+# 而真正缺 cv2 的环境会在运行时才炸。
+"src/image_processor.py" = ["F401"]

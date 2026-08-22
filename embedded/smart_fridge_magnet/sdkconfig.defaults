@@ -1,0 +1,63 @@
+# =====================================================================
+# 智能冰箱贴六色电子纸 (ESP32-S3 mini N4R2) 构建基线默认配置
+#
+# 提交在库里的 sdkconfig 曾被错误初始化为普通 ESP32 / 2MB Flash / 无 PSRAM /
+# 单 App 分区 / 未启用蓝牙，与真实 Pro 硬件（ESP32-S3、4MB Flash、2MB Quad
+# PSRAM、双 OTA 分区、BLE+WiFi）完全不符，导致无法针对 Pro 正确构建。
+#
+# 本文件固化 Pro 的关键非默认项。首次针对 Pro 构建时执行：
+#
+#     idf.py set-target esp32s3    # 清除旧 sdkconfig 并按本文件重建
+#     idf.py build
+#
+# 之后如需改动配置用 `idf.py menuconfig`；本文件只保存必须固定的基线项。
+# =====================================================================
+
+# --- 主控芯片：ESP32-S3（mini N4R2） ---
+CONFIG_IDF_TARGET="esp32s3"
+
+# --- Flash：4MB，QIO @ 80MHz ---
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# --- PSRAM：2MB Quad @ 80MHz（N4R2） ---
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_TYPE_AUTO=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# --- 分区表：自定义双 OTA（ota_0/ota_1 各 1920K，适配 4MB Flash） ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# --- OTA 回滚保护 ---
+# 新固件启动后处于 PENDING_VERIFY，必须在本次运行内调用
+# esp_ota_mark_app_valid_cancel_rollback() 才会被确认；否则下次启动时 bootloader
+# 自动回滚到上一个分区。
+#
+# 对 Wi-Fi OTA 是必需项而非可选项：设备贴在冰箱上无人值守，一旦刷进一个「能开机
+# 但连不上 Wi-Fi」的固件，没有回滚就再也收不到任何 OTA —— 只能把设备拆下来插 USB。
+# 确认点选在「Wi-Fi 连通且 manifest 取到」之后（见 service_monitor.c），
+# 因为那正好等价于「这个固件还能接收下一次 OTA」。
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# --- 蓝牙：BLE（Bluedroid），service_ble 使用 esp_gatts/esp_gap_ble ---
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=y
+CONFIG_BT_BLE_ENABLED=y
+# BLE 4.2 传统广播 API（esp_ble_gap_start_advertising 等）；当前硬件为 BLE 4.2。
+# ESP-IDF 6.0 默认只开 5.0 特性，故显式启用 4.2，否则 service_ble_gatts 链接报 undefined。
+CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y
+
+# --- Wi-Fi：Pro 常驻同步（service_wifi） ---
+CONFIG_ESP_WIFI_ENABLED=y
+# --- 主任务栈：默认 3584 太小，冷启动初始化链（BLE Bluedroid + WiFi + PSA 加密）
+#     会触发 "stack overflow in task main" 并进入 boot loop，导致 BLE 从不广播。
+#     增大到 10240 以容纳初始化峰值。---
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+
+# --- TLS 信任锚：ESP-IDF 公共 CA bundle ---
+# 默认构建不携带任何项目生成的 CA。局域网自签部署必须先按 certs/README.md 生成 CA，
+# 再在本地 menuconfig 中显式启用自定义 bundle；该配置不会进入公开默认构建。
